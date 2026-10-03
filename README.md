@@ -23,4 +23,4 @@ Live at **https://lowry-secret-santa.vercel.app**
 ## Hosting
 
 - **Site:** Vercel (static files, no build step). Deploy with `npx vercel deploy --prod`.
-- **Database:** Supabase (free tier). Free projects pause after about a week without use, so restore it from the Supabase dashboard if the site says "Could not reach the workshop".
+- **Database:** Supabase (free tier). Free projects pause after about a week without use. A Vercel cron (`vercel.json`) calls `api/keepalive.js` every day at 09:00 UTC to keep it awake. If the site ever says "Could not reach the workshop", restore the project from the Supabase dashboard.
