@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lowry Family Secret Santa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #0f1b3d; --night2: #182a5c; --snow: #f4f8ff; --red: #d62f3a; --red-d: #8e1c26;
+    --green: #2e9e4f; --green-d: #17602f; --gold: #ffd23f; --ink: #1a1a2e; --paper: #fff6e0;
+  }
+  * { box-sizing: border-box; }
+  html { image-rendering: pixelated; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--snow);
+    font-family: 'VT323', monospace; font-size: 24px; line-height: 1.15;
+    background: linear-gradient(var(--night) 0%, var(--night2) 100%) fixed;
+  }
+  #snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  main { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 16px 16px 170px; }
+  h1, h2, h3, .px { font-family: 'Press Start 2P', monospace; font-weight: normal; }
+  h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
+       color: var(--gold); text-shadow: 3px 3px 0 var(--red-d), 6px 6px 0 #000; }
+  .sub { text-align: center; color: #bcd0ff; margin: 0 0 16px; }
+  .countdown-title { text-align: center; color: var(--gold); margin: 6px 0 8px; font-size: 22px; }
+  .countdown { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+  .countdown .unit { background: var(--red); min-width: 72px; padding: 10px 8px 6px; text-align: center;
+                     box-shadow: inset -4px -4px 0 var(--red-d), inset 4px 4px 0 #ff6b73, 0 4px 0 #000; }
+  .countdown .num { display: block; font-family: 'Press Start 2P', monospace; font-size: clamp(16px, 4.5vw, 24px); color: #fff; }
+  .countdown .lab { font-size: 18px; color: #ffe9b0; }
+  .hero { display: flex; justify-content: center; align-items: flex-end; gap: 16px; margin-top: 12px; }
+  canvas.sprite { image-rendering: pixelated; }
+
+  /* pixel-notched panels */
+  .panel {
+    background: var(--paper); color: var(--ink); margin: 18px 6px; padding: 18px;
+    box-shadow: 0 -6px 0 -2px var(--paper), 0 6px 0 -2px var(--paper), -6px 0 0 -2px var(--paper), 6px 0 0 -2px var(--paper),
+                0 -9px 0 -3px var(--ink), 0 9px 0 -3px var(--ink), -9px 0 0 -3px var(--ink), 9px 0 0 -3px var(--ink),
+                10px 14px 0 0 rgba(0,0,0,.35);
+  }
+  .panel.green { background: #e4f7e8; box-shadow: 0 -6px 0 -2px #e4f7e8, 0 6px 0 -2px #e4f7e8, -6px 0 0 -2px #e4f7e8, 6px 0 0 -2px #e4f7e8,
+                0 -9px 0 -3px var(--green-d), 0 9px 0 -3px var(--green-d), -9px 0 0 -3px var(--green-d), 9px 0 0 -3px var(--green-d), 10px 14px 0 0 rgba(0,0,0,.35); }
+  .panel h2 { font-size: 14px; line-height: 1.6; margin: 0 0 12px; color: var(--red-d); }
+  .panel p { margin: 8px 0; }
+
+  .btn {
+    font-family: 'Press Start 2P', monospace; font-size: 12px; cursor: pointer; color: #fff; background: var(--red);
+    border: 0; padding: 14px 18px; margin-top: 8px;
+    box-shadow: inset -4px -4px 0 var(--red-d), inset 4px 4px 0 #ff6b73, 0 4px 0 #000;
+  }
+  .btn:active { transform: translateY(3px); box-shadow: inset -4px -4px 0 var(--red-d), inset 4px 4px 0 #ff6b73, 0 1px 0 #000; }
+  .btn.green { background: var(--green); box-shadow: inset -4px -4px 0 var(--green-d), inset 4px 4px 0 #6fdc8c, 0 4px 0 #000; }
+  .btn.ghost { background: #6b6f8d; box-shadow: inset -4px -4px 0 #3e415c, inset 4px 4px 0 #9a9eb8, 0 4px 0 #000; }
+  .btn[disabled] { filter: grayscale(1) brightness(.8); cursor: not-allowed; }
+
+  /* people cards: avatar on top, name and status below */
+  .folks { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
+  .folk {
+    font-family: inherit; color: var(--ink); background: #fff; border: 4px solid var(--ink); padding: 10px 6px 8px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+  }
+  .folk.pick { cursor: pointer; }
+  .folk.pick:hover, .folk.pick:focus { background: #ffeaa0; }
+  .folk.pick canvas { transition: transform .12s steps(2); }
+  .folk.pick:hover canvas, .folk.pick:focus canvas { transform: translateY(-6px); }
+  .folk b { font-family: 'Press Start 2P', monospace; font-weight: normal; font-size: 10px; line-height: 1.5; }
+  .folk.me { border-color: var(--green-d); background: #e4f7e8; }
+  .tag { display: inline-block; font-size: 20px; padding: 0 8px; background: #ddd; }
+  .tag.in { background: var(--green); color: #fff; }
+
+  input, textarea {
+    width: 100%; font-family: 'VT323', monospace; font-size: 26px; padding: 10px; color: var(--ink);
+    background: #fff; border: 4px solid var(--ink); border-radius: 0; margin-top: 6px;
+  }
+  textarea { min-height: 170px; resize: vertical; }
+  input:focus, textarea:focus { outline: 4px solid var(--gold); }
+  .err { color: var(--red-d); min-height: 1.2em; margin-top: 6px; }
+  .ok  { color: var(--green-d); min-height: 1.2em; margin-top: 6px; }
+
+  .bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .bar .who { display: flex; align-items: flex-end; gap: 14px; }
+  .bar .px { font-size: 13px; line-height: 1.6; }
+  .centre { text-align: center; }
+  .centre .avatar { display: flex; justify-content: center; margin: 4px 0 10px; }
+  .list { white-space: pre-wrap; background: #fff; border: 4px dashed var(--red); padding: 12px; margin-top: 8px; min-height: 60px; text-align: left; }
+  .reveal .big { font-family: 'Press Start 2P', monospace; font-size: clamp(16px, 5vw, 26px); line-height: 1.6; color: var(--red-d); margin: 10px 0; }
+  .rules { text-align: left; background: #e4f7e8; border: 4px solid var(--green-d); padding: 12px 16px; margin: 16px 0 6px; }
+  .rules h3 { font-size: 12px; line-height: 1.6; color: var(--green-d); margin: 0 0 6px; }
+  .rules ol { margin: 0; padding-left: 26px; }
+  .rules li { margin: 6px 0; }
+  .rules b { color: var(--red-d); font-weight: normal; }
+  .match { display: flex; justify-content: center; align-items: flex-end; gap: 18px; margin: 8px 0; }
+  .gifts { display: flex; justify-content: center; gap: 10px; margin: 8px 0; }
+  .hidden { display: none !important; }
+  .walkers-layer { position: fixed; left: 0; right: 0; bottom: 0; height: 150px; pointer-events: none; z-index: 5; overflow: hidden; }
+  .walker { position: absolute; left: 0; bottom: 24px; will-change: transform; }
+  .walker canvas { display: block; image-rendering: pixelated; }
+  .walker span { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 1px; white-space: nowrap;
+                 font-size: 18px; line-height: 1; color: #fff; text-shadow: 2px 2px 0 #000; }
+  .setup { background: #fff3cd; color: #5a4300; padding: 12px; border: 4px solid #5a4300; margin: 18px 6px; }
+</style>
+</head>
+<body>
+<canvas id="snow"></canvas>
+<main>
+  <h1>Lowry Family<br>Secret Santa</h1>
+  <p class="sub">Merry Christmas, everyone!</p>
+  <p class="countdown-title" id="countdownTitle"></p>
+  <div class="countdown" id="countdown"></div>
+  <div class="hero">
+    <canvas class="sprite" data-sprite="gift" data-scale="5"></canvas>
+    <canvas class="sprite" data-sprite="tree" data-scale="9"></canvas>
+    <canvas class="sprite" data-sprite="gift2" data-scale="5"></canvas>
+  </div>
+
+  <div id="setup" class="setup hidden">Setup needed: put your Supabase URL and key into <b>config.js</b>.</div>
+
+  <!-- 1. Who are you? -->
+  <section id="pick" class="panel hidden">
+    <h2>Who are you?</h2>
+    <p>Tap yourself to get in. The first time, you'll choose your own PIN.</p>
+    <div id="folks" class="folks"></div>
+  </section>
+
+  <!-- 2. PIN -->
+  <section id="pin" class="panel hidden centre">
+    <div class="avatar" id="pinAvatar"></div>
+    <h2 id="pinTitle">Enter PIN</h2>
+    <p id="pinHelp"></p>
+    <input id="pinInput" type="password" autocomplete="off" maxlength="40" placeholder="PIN">
+    <input id="pinConfirm" type="password" autocomplete="off" maxlength="40" placeholder="Type it again" class="hidden">
+    <div id="pinErr" class="err"></div>
+    <button class="btn" id="pinGo">Enter</button>
+    <button class="btn ghost" id="pinBack">Back</button>
+  </section>
+
+  <!-- 3. Home -->
+  <section id="home" class="hidden">
+    <div class="panel green">
+      <div class="bar">
+        <div class="who"><div id="meAvatar"></div><span class="px" id="whoami"></span></div>
+        <button class="btn ghost" id="logout">Log out</button>
+      </div>
+    </div>
+
+    <div class="panel" id="roomPanel">
+      <h2>The Workshop</h2>
+      <div id="room" class="folks"></div>
+      <p id="roomMsg"></p>
+    </div>
+
+    <div class="panel hidden reveal centre" id="revealPanel">
+      <h2>You are giving to...</h2>
+      <div class="gifts" id="giftsRow">
+        <canvas class="sprite" data-sprite="gift" data-scale="6"></canvas>
+        <canvas class="sprite" data-sprite="gift2" data-scale="6"></canvas>
+      </div>
+      <button class="btn" id="revealBtn">Open your gift tag</button>
+      <div id="revealBody" class="hidden">
+        <div class="match" id="recAvatar"></div>
+        <div class="big" id="recName"></div>
+        <p>Here are some ideas they've suggested:</p>
+        <div class="list" id="recList"></div>
+        <div class="rules">
+          <h3>The Rules</h3>
+          <ol>
+            <li><b>Spend limit: £50.</b> Up to £50 in total. You don't have to spend it all.</li>
+            <li><b>Their list is just ideas.</b> Pick something from it, or surprise them with something you think they'd love.</li>
+            <li><b>Keep it secret!</b> Don't tell anyone who you've got, including your partner.</li>
+            <li><b>Check back.</b> They might add to their list, so have another look before you buy.</li>
+            <li><b>Label it.</b> Put their name on the tag, but not yours.</li>
+          </ol>
+        </div>
+        <button class="btn ghost" id="hideBtn">Hide</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>My Wish List</h2>
+      <p>Things you'd like. Ideas, sizes, favourites, budget notes...</p>
+      <textarea id="wish" placeholder="e.g. Cosy socks, a good book, anything Lego, fancy hot chocolate..."></textarea>
+      <button class="btn green" id="saveWish">Save list</button>
+      <div id="wishMsg" class="ok"></div>
+    </div>
+  </section>
+</main>
+<div id="walkers" class="walkers-layer" aria-hidden="true"></div>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const CFG = window.SANTA_CONFIG || {};
+  const state = { people: [], drawn: false, me: null, pin: null, picked: null };
+
+  /* ---------- pixel sprites (tree and presents) ---------- */
+  const PAL = { g: '#2e9e4f', G: '#6fdc8c', d: '#17602f', b: '#7a4a21', y: '#ffd23f', r: '#d62f3a', R: '#8e1c26',
+                w: '#f4f8ff', o: '#ff9f1c', B: '#3a7bd5', c: '#9fd0ff' };
+  const SPRITES = {
+    tree: [
+      "......y......",
+      ".....yyy.....",
+      "......g......",
+      ".....ggg.....",
+      "....ggrgg....",
+      "...gGgggog...",
+      "..gggggrggg..",
+      ".gGgggoggggg.",
+      "gggggggrggggg",
+      "...gggggGg...",
+      "..gggooggGg..",
+      ".gGgggggggrg.",
+      "ggggrgggGgggg",
+      "gGgggggoggggg",
+      "......b......",
+      ".....bbb.....",
+      ".....bbb....."
+    ],
+    gift: [
+      "...rr.rr...",
+      "..r..y..r..",
+      "...r.y.r...",
+      "rrrrryrrrrr",
+      "rrrrryrrrrr",
+      "yyyyyyyyyyy",
+      "rrrrryrrrrr",
+      "rrrrryrrrrr",
+      "RRRRRyRRRRR"
+    ],
+    gift2: [
+      "...gg.gg...",
+      "..g..w..g..",
+      "...g.w.g...",
+      "BBBBBwBBBBB",
+      "BBBBBwBBBBB",
+      "wwwwwwwwwww",
+      "BBBBBwBBBBB",
+      "BBBBBwBBBBB",
+      "dBBBBwBBBBd"
+    ]
+  };
+  function drawSprite(cv) {
+    const rows = SPRITES[cv.dataset.sprite], s = +cv.dataset.scale || 4;
+    const w = Math.max(...rows.map(r => r.length));
+    cv.width = w * s; cv.height = rows.length * s;
+    const ctx = cv.getContext('2d');
+    rows.forEach((row, y) => [...row].forEach((ch, x) => {
+      if (PAL[ch]) { ctx.fillStyle = PAL[ch]; ctx.fillRect(x * s, y * s, s, s); }
+    }));
+  }
+  function drawAllSprites() { document.querySelectorAll('canvas.sprite').forEach(drawSprite); }
+
+  /* ---------- the family, in pixels ---------- */
+  const BLONDE = '#f2d16b', BROWN = '#7a4a21', DARK_BROWN = '#3b2417', GINGER = '#c8602a', GREY = '#cfd3d8';
+  const PEOPLE = {
+    Patrick:   { age: 'young', style: 'short', hair: BLONDE,     glasses: true, shirt: '#d62f3a', accent: '#ffffff' },
+    Rebecca:   { age: 'young', style: 'long',  hair: DARK_BROWN,                shirt: '#2e9e4f', accent: '#ffd23f' },
+    Chris:     { age: 'mid',   style: 'short', hair: BLONDE,                    shirt: '#3a7bd5', accent: '#ffffff' },
+    Lauren:    { age: 'mid',   style: 'bob',   hair: DARK_BROWN,                shirt: '#b0307a', accent: '#ffffff' },
+    Matthew:   { age: 'mid',   style: 'short', hair: BROWN,                     shirt: '#2e9e4f', accent: '#ffffff' },
+    Jane:      { age: 'mid',   style: 'bob',   hair: BROWN,                     shirt: '#d62f3a', accent: '#ffd23f' },
+    Frances:   { age: 'old',   style: 'long',  hair: GINGER,                    shirt: '#7a3fb0', accent: '#ffffff' },
+    Billy:     { age: 'old',   style: 'bald',  hair: GREY,                      shirt: '#2a7f8e', accent: '#ffd23f' },
+    Charlotte: { age: 'mid',   style: 'long',  hair: BLONDE,                    shirt: '#e8742c', accent: '#ffffff' },
+    Simon:     { age: 'mid',   style: 'short', hair: BROWN,       skin: '#f0c79a', shirt: '#17602f', accent: '#ffd23f' }
+  };
+  const CW = 12, CH = 16;
+  // builds a CW x CH grid of colours (null = transparent) for one person and walk frame (0 or 1);
+  // pose 'wave1' / 'wave2' raises the left arm (alternate them to wave)
+  function charGrid(p, frame, pose) {
+    const g = Array.from({ length: CH }, () => Array(CW).fill(null));
+    const set = (x, y, c) => { if (x >= 0 && x < CW && y >= 0 && y < CH) g[y][x] = c; };
+    const row = (x1, x2, y, c) => { for (let x = x1; x <= x2; x++) set(x, y, c); };
+    const skin = p.skin || '#f6d3b0', hair = p.hair, dark = '#1a1a2e', pants = '#2f3b66', shoe = '#2b2b3d';
+    const torsoH = p.age === 'young' ? 4 : 5, legH = p.age === 'young' ? 3 : 4;
+    const top = CH - (5 + torsoH + legH);       // everyone stands on the same ground line
+    const sx = p.age === 'old' ? 1 : 0;         // old: head leans forward
+    const hx = x => x + sx;
+    const ty = top + 5, ly = ty + torsoH;
+
+    // legs (frame 1 = mid-stride)
+    const leg = (x1, x2, len) => { for (let j = 0; j < len; j++) row(x1, x2, ly + j, j === len - 1 ? shoe : pants); };
+    if (frame === 0) { leg(4, 5, legH); leg(6, 7, legH); } else { leg(3, 4, legH); leg(7, 8, legH - 1); }
+
+    // christmas jumper + arms
+    for (let j = 0; j < torsoH; j++) row(3, 8, ty + j, p.shirt);
+    for (let x = 3; x <= 8; x += 2) set(x, ty + 1, p.accent);
+    for (let j = 0; j < torsoH - 1; j++) set(9, ty + j, p.shirt);
+    set(9, ty + torsoH - 1, skin);
+    if (pose) {
+      const hx2 = pose === 'wave1' ? 1 : 0;      // hand sways in and out
+      set(2, ty, p.shirt); set(1, ty, p.shirt); set(hx2, ty - 1, p.shirt); set(hx2, ty - 2, skin);
+    } else {
+      for (let j = 0; j < torsoH - 1; j++) set(2, ty + j, p.shirt);
+      set(2, ty + torsoH - 1, skin);
+    }
+    if (p.age === 'old') for (let y = ty + torsoH - 1; y < CH; y++) set(10, y, '#7a4a21');   // walking stick
+
+    // face
+    row(hx(4), hx(7), top + 4, skin);
+    row(hx(3), hx(8), top + 2, skin); row(hx(3), hx(8), top + 3, skin);
+    if (p.age === 'young') { set(hx(3), top + 3, '#f2a29a'); set(hx(8), top + 3, '#f2a29a'); }   // rosy cheeks
+    if (p.glasses) {
+      row(hx(3), hx(8), top + 2, dark); set(hx(4), top + 2, '#bfe3ff'); set(hx(7), top + 2, '#bfe3ff');
+    } else { set(hx(4), top + 2, dark); set(hx(7), top + 2, dark); }
+    const mouth = p.age === 'young' ? '#d9776f' : p.age === 'mid' ? '#b5524a' : '#8f5148';
+    set(hx(5), top + 3, mouth); set(hx(6), top + 3, mouth);
+
+    // hair
+    if (p.style === 'bald') {
+      row(hx(4), hx(7), top, '#f9dcc0'); row(hx(3), hx(8), top + 1, skin);        // shiny head
+      for (let y = top + 2; y <= top + 3; y++) { set(hx(3), y, hair); set(hx(8), y, hair); }  // grey sides
+    } else {
+      row(hx(4), hx(7), top, hair); row(hx(3), hx(8), top + 1, hair);
+      if (p.style === 'bob') {
+        for (let y = top + 1; y <= top + 3; y++) { set(hx(2), y, hair); set(hx(9), y, hair); }
+        set(hx(3), top + 2, hair); set(hx(8), top + 2, hair);
+      }
+      if (p.style === 'long') {
+        for (let y = top + 1; y <= top + 4; y++) { set(hx(2), y, hair); set(hx(9), y, hair); }
+        set(hx(3), top + 2, hair); set(hx(8), top + 2, hair); set(hx(3), top + 3, hair); set(hx(8), top + 3, hair);
+        for (let y = ty; y <= ty + 1; y++) { set(3, y, hair); set(8, y, hair); }   // falls over the jumper
+      }
+    }
+    return g;
+  }
+  function paint(cv, grid, s) {
+    cv.width = CW * s; cv.height = CH * s;
+    const ctx = cv.getContext('2d');
+    grid.forEach((r, y) => r.forEach((c, x) => { if (c) { ctx.fillStyle = c; ctx.fillRect(x * s, y * s, s, s); } }));
+  }
+  function avatar(name, s, frame) {
+    const cv = document.createElement('canvas'); cv.className = 'sprite';
+    if (PEOPLE[name]) paint(cv, charGrid(PEOPLE[name], frame || 0), s);
+    return cv;
+  }
+
+  /* ---------- everyone wanders around the bottom of the page ---------- */
+  let walkersStarted = false;
+  function startWalkers(people) {
+    if (walkersStarted) return; walkersStarted = true;
+    const layer = $('walkers'), s = innerWidth < 520 ? 3 : 4, w0 = CW * s;
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const maxY = 46;
+    const names = people.map(p => p.name).filter(n => PEOPLE[n]);
+    const walkers = names.map((n, i, all) => {
+      const p = PEOPLE[n], el = document.createElement('div'), cv = document.createElement('canvas'), lab = document.createElement('span');
+      el.className = 'walker'; lab.textContent = n; el.append(cv, lab); layer.append(el);
+      const w = { p, el, cv, frame: 0, tick: 0, pause: 0, vy: 0,
+        x: reduce ? (i + .5) * (innerWidth / all.length) - w0 / 2 : Math.random() * Math.max(60, innerWidth - w0),
+        y: reduce ? 0 : Math.random() * maxY, dir: Math.random() < .5 ? -1 : 1,
+        v: (p.age === 'old' ? .25 : p.age === 'young' ? .6 : .42) + Math.random() * .15 };
+      paint(cv, charGrid(p, 0), s);
+      return w;
+    });
+    const place = w => {
+      w.el.style.transform = `translate(${w.x}px, ${-w.y}px)`;
+      w.el.style.zIndex = 100 - Math.round(w.y);
+      w.cv.style.transform = w.dir < 0 ? 'scaleX(-1)' : '';
+    };
+    walkers.forEach(place);
+    if (reduce) return;
+    (function step() {
+      for (const w of walkers) {
+        if (w.pause > 0) {
+          if (--w.pause === 0) w.vy = (Math.random() - .5) * .3;
+          if (w.frame !== 0) { w.frame = 0; paint(w.cv, charGrid(w.p, 0), s); }
+        } else {
+          w.x += w.dir * w.v; w.y += w.vy;
+          if (w.y < 0 || w.y > maxY) { w.y = Math.min(maxY, Math.max(0, w.y)); w.vy = -w.vy; }
+          if (w.x < 0 || w.x > innerWidth - w0) { w.x = Math.min(innerWidth - w0, Math.max(0, w.x)); w.dir = -w.dir; }
+          if (++w.tick % 14 === 0) { w.frame ^= 1; paint(w.cv, charGrid(w.p, w.frame), s); }
+          if (Math.random() < .004) { w.pause = 60 + Math.random() * 180; }
+          else if (Math.random() < .003) w.dir = -w.dir;
+        }
+        place(w);
+      }
+      requestAnimationFrame(step);
+    })();
+  }
+
+  /* ---------- falling pixel snow ---------- */
+  (function snow() {
+    const cv = $('snow'), ctx = cv.getContext('2d');
+    let flakes = [];
+    const resize = () => {
+      cv.width = innerWidth; cv.height = innerHeight;
+      const n = Math.min(110, Math.floor(innerWidth / 9));
+      flakes = Array.from({ length: n }, () => ({
+        x: Math.random() * cv.width, y: Math.random() * cv.height,
+        s: Math.random() < .3 ? 6 : 3, v: .4 + Math.random() * 1.1, p: Math.random() * 6
+      }));
+    };
+    addEventListener('resize', resize); resize();
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      ctx.fillStyle = '#fff'; flakes.forEach(f => ctx.fillRect(f.x | 0, f.y | 0, f.s, f.s)); return;
+    }
+    (function tick(t) {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = 'rgba(255,255,255,.85)';
+      for (const f of flakes) {
+        f.y += f.v; f.x += Math.sin(t / 900 + f.p) * .35;
+        if (f.y > cv.height) { f.y = -6; f.x = Math.random() * cv.width; }
+        ctx.fillRect(Math.round(f.x / 3) * 3, Math.round(f.y / 3) * 3, f.s, f.s);
+      }
+      requestAnimationFrame(tick);
+    })(0);
+  })();
+
+  /* ---------- countdown to Christmas Day (viewer's local time) ---------- */
+  (function countdown() {
+    const box = $('countdown'), title = $('countdownTitle');
+    const nums = ['days', 'hours', 'mins', 'secs'].map(label => {
+      const u = document.createElement('div'); u.className = 'unit';
+      const n = document.createElement('span'); n.className = 'num';
+      const l = document.createElement('span'); l.className = 'lab'; l.textContent = label;
+      u.append(n, l); box.append(u); return n;
+    });
+    function tick() {
+      const now = new Date();
+      if (now.getMonth() === 11 && now.getDate() === 25) {
+        title.textContent = "It's Christmas Day! Merry Christmas!"; box.classList.add('hidden'); return;
+      }
+      let xmas = new Date(now.getFullYear(), 11, 25);
+      if (now > xmas) xmas = new Date(now.getFullYear() + 1, 11, 25);
+      const s = Math.floor((xmas - now) / 1000);
+      [Math.floor(s / 86400), Math.floor(s % 86400 / 3600), Math.floor(s % 3600 / 60), s % 60]
+        .forEach((v, i) => { nums[i].textContent = i ? String(v).padStart(2, '0') : v; });
+      title.textContent = 'Countdown to Christmas'; box.classList.remove('hidden');
+    }
+    tick(); setInterval(tick, 1000);
+  })();
+
+  /* ---------- api ---------- */
+  async function rpc(fn, args) {
+    const r = await fetch(`${CFG.url}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: { apikey: CFG.key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(args || {})
+    });
+    const j = await r.json().catch(() => null);
+    if (!r.ok) throw new Error((j && j.message) || 'Something went wrong, try again');
+    return j;
+  }
+
+  /* ---------- helpers ---------- */
+  const show = id => $(id).classList.remove('hidden');
+  const hide = id => $(id).classList.add('hidden');
+  const view = name => { ['pick', 'pin', 'home'].forEach(hide); show(name); };
+  const SAVE_KEY = 'lowrySantaV2';
+  const store = {
+    get() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch { return null; } },
+    set(v) { try { localStorage.setItem(SAVE_KEY, JSON.stringify(v)); } catch {} },
+    clear() { try { localStorage.removeItem(SAVE_KEY); } catch {} }
+  };
+  const person = id => state.people.find(p => p.id === id);
+
+  // a card with the person's pixel avatar, name and a status tag
+  function folkCard(p, tag, tagClass) {
+    const el = document.createElement('div'); el.className = 'folk';
+    const b = document.createElement('b'); b.textContent = p.name;
+    const t = document.createElement('span'); t.className = 'tag ' + tagClass; t.textContent = tag;
+    el.append(avatar(p.name, 5), b, t);
+    return el;
+  }
+
+  /* ---------- screens ---------- */
+  // hovering a person on the picker makes them hop and wave
+  let waveTimer = null;
+  function wave(cv, name, on) {
+    clearInterval(waveTimer); waveTimer = null;
+    const p = PEOPLE[name]; if (!p) return;
+    if (!on) { paint(cv, charGrid(p, 0), 5); return; }
+    let up = false;
+    const step = () => { up = !up; paint(cv, charGrid(p, 0, up ? 'wave1' : 'wave2'), 5); };
+    step(); waveTimer = setInterval(step, 260);
+  }
+
+  function renderPick() {
+    clearInterval(waveTimer); waveTimer = null;
+    const box = $('folks'); box.innerHTML = '';
+    state.people.forEach(p => {
+      const el = folkCard(p, p.joined ? 'joined' : 'new', p.joined ? 'in' : '');
+      el.classList.add('pick'); el.setAttribute('role', 'button'); el.tabIndex = 0;
+      const go = () => openPin(p.id);
+      el.onclick = go; el.onkeydown = e => { if (e.key === 'Enter') go(); };
+      const cv = el.querySelector('canvas');
+      el.onmouseenter = el.onfocus = () => wave(cv, p.name, true);
+      el.onmouseleave = el.onblur = () => wave(cv, p.name, false);
+      box.append(el);
+    });
+  }
+
+  function openPin(id) {
+    const p = person(id); state.picked = id;
+    $('pinAvatar').innerHTML = ''; $('pinAvatar').append(avatar(p.name, 9));
+    $('pinTitle').textContent = p.joined ? `Welcome back, ${p.name}!` : `Hello ${p.name}!`;
+    $('pinHelp').textContent = p.joined
+      ? 'Enter your PIN.'
+      : 'This is your first visit. Create a PIN (at least 4 characters) so only you can open your match. Remember it!';
+    $('pinConfirm').classList.toggle('hidden', p.joined);
+    $('pinGo').textContent = p.joined ? 'Enter' : 'Create PIN';
+    $('pinInput').placeholder = p.joined ? 'PIN' : 'Create a PIN';
+    $('pinInput').value = ''; $('pinConfirm').value = ''; $('pinErr').textContent = '';
+    view('pin'); $('pinInput').focus();
+  }
+
+  async function tryLogin() {
+    const pin = $('pinInput').value.trim(), p = person(state.picked);
+    $('pinErr').textContent = '';
+    if (!p.joined) {
+      if (pin.length < 4) { $('pinErr').textContent = 'PIN must be at least 4 characters'; return; }
+      if (pin !== $('pinConfirm').value.trim()) { $('pinErr').textContent = "Those two PINs don't match"; return; }
+    }
+    try {
+      await rpc('santa_login', { w: state.picked, p: pin });
+      state.me = state.picked; state.pin = pin;
+      store.set({ me: state.me, pin });
+      await enterHome();
+    } catch (e) { $('pinErr').textContent = e.message; }
+  }
+
+  async function enterHome() {
+    view('home');
+    const me = person(state.me);
+    $('meAvatar').innerHTML = ''; $('meAvatar').append(avatar(me.name, 5));
+    $('whoami').textContent = me.name;
+    await refreshHome(true);
+  }
+
+  function renderRoom() {
+    const box = $('room'); box.innerHTML = '';
+    state.people.forEach(p => {
+      const el = folkCard(p, p.joined ? 'logged in' : 'not yet', p.joined ? 'in' : '');
+      if (p.id === state.me) el.classList.add('me');
+      box.append(el);
+    });
+    const joined = state.people.filter(p => p.joined).length, total = state.people.length;
+    $('roomMsg').textContent = joined === total
+      ? `All ${total} elves have logged in!`
+      : `${joined} of ${total} have logged in so far. Everyone already has a match waiting for them.`;
+  }
+
+  // whether this person has opened their gift tag; remembered so it stays open on reload / return visits
+  const revealKey = () => 'lowrySantaOpenV2_' + state.me;
+  function revealedFlag() { try { return localStorage.getItem(revealKey()) === '1'; } catch { return false; } }
+  function setRevealed(open, remember) {
+    $('revealBody').classList.toggle('hidden', !open);
+    $('revealBtn').classList.toggle('hidden', open);
+    $('giftsRow').classList.toggle('hidden', open);
+    if (remember) { try { localStorage.setItem(revealKey(), open ? '1' : '0'); } catch {} }
+  }
+
+  async function refreshHome(first) {
+    try {
+      const st = await rpc('santa_status');
+      state.people = st.people; state.drawn = st.drawn;
+      renderRoom();
+      if (state.drawn || first) {
+        const me = await rpc('santa_me', { w: state.me, p: state.pin });
+        if (first) $('wish').value = me.wishlist || '';
+        if (me.drawn && me.recipient) {
+          const r = me.recipient;
+          $('recAvatar').innerHTML = '';
+          $('recAvatar').append(avatar(r.name, 10));
+          const gift = document.createElement('canvas'); gift.className = 'sprite';
+          gift.dataset.sprite = 'gift'; gift.dataset.scale = 6; drawSprite(gift); $('recAvatar').append(gift);
+          $('recName').textContent = r.name;
+          $('recList').textContent = (r.wishlist || '').trim() || "They haven't added a wish list yet. Check back soon!";
+          show('revealPanel');
+          setRevealed(revealedFlag());   // stays open if you've already opened it
+        }
+      }
+    } catch (e) { /* transient (network blip); next poll will retry */ }
+  }
+
+  /* ---------- events ---------- */
+  $('pinGo').onclick = tryLogin;
+  $('pinInput').onkeydown = e => { if (e.key === 'Enter') { if ($('pinConfirm').classList.contains('hidden')) tryLogin(); else $('pinConfirm').focus(); } };
+  $('pinConfirm').onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
+  $('pinBack').onclick = () => view('pick');
+  $('logout').onclick = () => { store.clear(); state.me = state.pin = null; hide('revealPanel'); loadPick(); };
+  $('revealBtn').onclick = () => setRevealed(true, true);
+  $('hideBtn').onclick = () => setRevealed(false, true);
+  $('saveWish').onclick = async () => {
+    $('wishMsg').className = 'ok'; $('wishMsg').textContent = '';
+    try {
+      await rpc('santa_save_wishlist', { w: state.me, p: state.pin, wl: $('wish').value });
+      $('wishMsg').textContent = 'Saved!';
+    } catch (e) { $('wishMsg').className = 'err'; $('wishMsg').textContent = e.message; }
+  };
+
+  async function loadPick() {
+    view('pick');
+    try {
+      const st = await rpc('santa_status');
+      state.people = st.people; state.drawn = st.drawn;
+      renderPick(); startWalkers(state.people);
+    } catch (e) { $('folks').textContent = 'Could not reach the workshop: ' + e.message; }
+  }
+
+  /* ---------- boot ---------- */
+  async function boot() {
+    drawAllSprites();
+    if (!CFG.url || CFG.url.includes('YOUR-PROJECT')) { show('setup'); return; }
+    const saved = store.get();
+    if (saved) {
+      try {
+        const st = await rpc('santa_status');
+        state.people = st.people; state.drawn = st.drawn;
+        await rpc('santa_login', { w: saved.me, p: saved.pin });
+        state.me = saved.me; state.pin = saved.pin;
+        startWalkers(state.people);
+        await enterHome();
+      } catch { store.clear(); state.me = state.pin = null; }
+    }
+    if (!state.me) await loadPick();
+    // one poll for everything: the workshop/draw status when logged in, the "who has joined" list on the picker
+    setInterval(async () => {
+      if (state.me) return refreshHome(false);
+      if (!$('pick').classList.contains('hidden')) {
+        try { const st = await rpc('santa_status'); state.people = st.people; renderPick(); } catch {}
+      }
+    }, 10000);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
