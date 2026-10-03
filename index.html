@@ -446,17 +446,17 @@
   };
   // melody: NOTE:beats separated into bars by '|', R = rest. chords: one root per bar, '-' = no bass
   const SONGS = [
-    { bpm: 100, bells: true,   // Jingle Bells
+    { bpm: 120,                // Jingle Bells
       melody: `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
                F5:1 F5:1 F5:1.5 F5:.5 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | E5:1 D5:1 D5:1 E5:1 | D5:2 G5:2 |
                E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
                F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | G5:1 G5:1 F5:1 D5:1 | C5:4`,
       chords: 'C C C C F C D G C C C C F C G C' },
-    { bpm: 96,                 // We Wish You a Merry Christmas (3/4, with a pickup)
+    { bpm: 116,                // We Wish You a Merry Christmas (3/4, with a pickup)
       melody: `R:2 D5:1 | G5:1 G5:.5 A5:.5 G5:.5 F#5:.5 | E5:1 E5:1 E5:1 | A5:1 A5:.5 B5:.5 A5:.5 G5:.5 | F#5:1 D5:1 D5:1 |
                B5:1 B5:.5 C6:.5 B5:.5 A5:.5 | G5:1 E5:1 D5:.5 D5:.5 | E5:1 A5:1 F#5:1 | G5:3`,
       chords: '- G C A D B C D G' },
-    { bpm: 92,                 // Deck the Halls
+    { bpm: 112,                // Deck the Halls
       melody: `G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2 |
                G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2`,
       chords: 'C C G C C C G C' }
@@ -473,7 +473,7 @@
         const root = freq(chords[i] + ('CDEF'.includes(chords[i][0]) ? '3' : '2')), fifth = root * Math.pow(2, -5 / 12);
         for (let b = 0; b < len; b++) {
           ev.push({ t: start + b, d: .9, f: (b === 0 || (len === 4 && b === 2)) ? root : fifth, v: 'bass' });
-          if (song.bells) ev.push({ t: start + b + .5, d: .1, v: 'bell' });
+          ev.push({ t: start + b, d: .1, v: 'bell', g: .06 }, { t: start + b + .5, d: .1, v: 'bell', g: .035 });   // sleigh bells
         }
       }
     });
@@ -493,11 +493,19 @@
     }
     function play(e, at, spb) {
       const end = at + e.d * spb;
-      if (e.v === 'bell') {                                                   // tiny sleigh-bell tick
-        const s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
-        s.buffer = noise; hp.type = 'highpass'; hp.frequency.value = 7000;
-        g.gain.setValueAtTime(.05, at); g.gain.exponentialRampToValueAtTime(.001, at + .06);
-        s.connect(hp); hp.connect(g); g.connect(master); s.start(at); s.stop(at + .08);
+      if (e.v === 'bell') {                   // sleigh-bell shake: a few quick bright noise hits plus a metallic ting
+        for (let k = 0; k < 3; k++) {
+          const t0 = at + k * .018, s = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+          s.buffer = noise; bp.type = 'bandpass'; bp.frequency.value = 8500; bp.Q.value = 2.5;
+          g.gain.setValueAtTime(e.g * (1 - k * .25), t0); g.gain.exponentialRampToValueAtTime(.0005, t0 + .07);
+          s.connect(bp); bp.connect(g); g.connect(master); s.start(t0); s.stop(t0 + .09);
+        }
+        [5200, 6930].forEach(f => {
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.type = 'sine'; o.frequency.value = f;
+          g.gain.setValueAtTime(e.g * .25, at); g.gain.exponentialRampToValueAtTime(.0005, at + .12);
+          o.connect(g); g.connect(master); o.start(at); o.stop(at + .14);
+        });
         return;
       }
       const o = ctx.createOscillator(), g = ctx.createGain();
