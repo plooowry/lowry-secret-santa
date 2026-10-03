@@ -452,10 +452,10 @@
                E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
                F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | G5:1 G5:1 F5:1 D5:1 | C5:4`,
       chords: 'C C C C F C D G C C C C F C G C' },
-    { bpm: 116,                // We Wish You a Merry Christmas (3/4, with a pickup)
-      melody: `R:2 D5:1 | G5:1 G5:.5 A5:.5 G5:.5 F#5:.5 | E5:1 E5:1 E5:1 | A5:1 A5:.5 B5:.5 A5:.5 G5:.5 | F#5:1 D5:1 D5:1 |
+    { bpm: 116,                // We Wish You a Merry Christmas (3/4, starts on a one-beat pickup)
+      melody: `D5:1 | G5:1 G5:.5 A5:.5 G5:.5 F#5:.5 | E5:1 E5:1 E5:1 | A5:1 A5:.5 B5:.5 A5:.5 G5:.5 | F#5:1 D5:1 D5:1 |
                B5:1 B5:.5 C6:.5 B5:.5 A5:.5 | G5:1 E5:1 D5:.5 D5:.5 | E5:1 A5:1 F#5:1 | G5:3`,
-      chords: '- G C A D B C D G' },
+      chords: 'D G C A D B C D G' },
     { bpm: 112,                // Deck the Halls
       melody: `G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2 |
                G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2`,
@@ -478,7 +478,7 @@
       }
     });
     ev.sort((a, b) => a.t - b.t);
-    return { ev, beats: t, barLen: bars[bars.length - 1].reduce((s, tok) => s + +tok.split(':')[1], 0) };
+    return { ev, beats: t };
   }
   const music = (() => {
     let ctx, master, wet, noise, timer = null, song = 0, cur, idx = 0, start = 0;
@@ -526,9 +526,9 @@
     }
     function schedule() {                     // look-ahead scheduler: queue anything due in the next 0.3s
       const spb = 60 / SONGS[song].bpm;
-      while (ctx.currentTime + .3 > start + (idx < cur.ev.length ? cur.ev[idx].t : cur.beats + cur.barLen) * spb) {
+      while (ctx.currentTime + .3 > start + (idx < cur.ev.length ? cur.ev[idx].t : cur.beats) * spb) {
         if (idx < cur.ev.length) { const e = cur.ev[idx++]; play(e, start + e.t * spb, spb); continue; }
-        start += (cur.beats + cur.barLen) * spb;  // a bar's rest, then the next carol
+        start += cur.beats * spb;                  // next carol starts straight away
         song = (song + 1) % SONGS.length; cur = songEvents(SONGS[song]); idx = 0;
         return;
       }
