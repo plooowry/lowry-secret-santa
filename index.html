@@ -268,17 +268,28 @@
     Frances:   { age: 'old',   style: 'long',  hair: GINGER,                    shirt: '#7a3fb0', accent: '#ffffff' },
     Billy:     { age: 'old',   style: 'bald',  hair: GREY,                      shirt: '#2a7f8e', accent: '#ffd23f' },
     Charlotte: { age: 'mid',   style: 'long',  hair: BLONDE,                    shirt: '#e8742c', accent: '#ffffff' },
-    Simon:     { age: 'mid',   style: 'short', hair: '#2b2b2b',   skin: '#f0c79a', shirt: '#17602f', accent: '#ffd23f' }
+    Simon:     { age: 'mid',   style: 'short', hair: '#2b2b2b',   skin: '#f0c79a', shirt: '#17602f', accent: '#ffd23f' },
+    // the children: they walk (and crawl) around the page but aren't in the Secret Santa
+    Lily:      { age: 'kid',     style: 'long',  hair: '#c9a54a',                  shirt: '#e85d9a', accent: '#ffffff' },
+    Hamish:    { age: 'small',   style: 'short', hair: '#a9773f',                  shirt: '#5aa0d8', accent: '#ffffff' },
+    Florence:  { age: 'toddler', style: 'bob',   hair: BLONDE,                     shirt: '#f29ac0', accent: '#ffffff' },
+    Nora:      { age: 'toddler', style: 'bob',   hair: DARK_BROWN, skin: '#f3cda4', shirt: '#9b6fd6', accent: '#ffffff', dummy: true },
+    Axel:      { age: 'baby',                    hair: '#2b2b2b',  skin: '#f3cda4', shirt: '#8fc9ff' }
   };
+  const KIDS = ['Lily', 'Hamish', 'Florence', 'Nora', 'Axel'];
+  const CHILD = { kid: 1, small: 1, toddler: 1 };
   const CW = 12, CH = 16;
   // builds a CW x CH grid of colours (null = transparent) for one person and walk frame (0 or 1);
   // pose 'wave1' / 'wave2' raises the left arm (alternate them to wave); hat adds a santa hat
   function charGrid(p, frame, pose, hat) {
+    if (p.age === 'baby') return babyGrid(p, frame, hat);
     const g = Array.from({ length: CH }, () => Array(CW).fill(null));
     const set = (x, y, c) => { if (x >= 0 && x < CW && y >= 0 && y < CH) g[y][x] = c; };
     const row = (x1, x2, y, c) => { for (let x = x1; x <= x2; x++) set(x, y, c); };
     const skin = p.skin || '#f6d3b0', hair = p.hair, dark = '#1a1a2e', pants = '#2f3b66', shoe = '#2b2b3d';
-    const torsoH = p.age === 'young' ? 4 : 5, legH = p.age === 'young' ? 3 : 4;
+    const torsoH = { young: 4, mid: 5, old: 5, kid: 3, small: 3, toddler: 2 }[p.age];
+    const legH = { young: 3, mid: 4, old: 4, kid: 3, small: 2, toddler: 2 }[p.age];
+    const childish = p.age === 'young' || CHILD[p.age];
     const top = CH - (5 + torsoH + legH);       // everyone stands on the same ground line
     const sx = p.age === 'old' ? 1 : 0;         // old: head leans forward
     const hx = x => x + sx;
@@ -305,12 +316,13 @@
     // face
     row(hx(4), hx(7), top + 4, skin);
     row(hx(3), hx(8), top + 2, skin); row(hx(3), hx(8), top + 3, skin);
-    if (p.age === 'young') { set(hx(3), top + 3, '#f2a29a'); set(hx(8), top + 3, '#f2a29a'); }   // rosy cheeks
+    if (childish) { set(hx(3), top + 3, '#f2a29a'); set(hx(8), top + 3, '#f2a29a'); }   // rosy cheeks
     if (p.glasses) {
       row(hx(3), hx(8), top + 2, dark); set(hx(4), top + 2, '#bfe3ff'); set(hx(7), top + 2, '#bfe3ff');
     } else { set(hx(4), top + 2, dark); set(hx(7), top + 2, dark); }
-    const mouth = p.age === 'young' ? '#d9776f' : p.age === 'mid' ? '#b5524a' : '#8f5148';
+    const mouth = childish ? '#d9776f' : p.age === 'mid' ? '#b5524a' : '#8f5148';
     set(hx(5), top + 3, mouth); set(hx(6), top + 3, mouth);
+    if (p.dummy) { set(hx(5), top + 3, '#5fb8ff'); set(hx(6), top + 3, '#5fb8ff'); set(hx(6), top + 4, '#ffd23f'); }   // dummy
 
     // hair
     if (p.style === 'bald') {
@@ -337,6 +349,26 @@
     }
     return g;
   }
+  // a crawling baby, side-on and facing right (rows 9-15); frame flips which hand and knee are forward
+  function babyGrid(p, frame, hat) {
+    const art = [
+      '......kkkk..',
+      '.ooo..kssEs.',
+      'oooooooCsss.',
+      'ooooooo.ss..',
+      frame ? '..oo..oo....' : '.oo..oo.....',
+      frame ? '..ss...ss...' : '.ss..ss.....'
+    ];
+    const col = { k: p.hair, o: p.shirt, s: p.skin || '#f6d3b0', E: '#1a1a2e', C: '#f2a29a' };
+    const g = Array.from({ length: CH }, () => Array(CW).fill(null));
+    art.forEach((r, j) => [...r].forEach((ch, x) => { if (col[ch]) g[CH - art.length + j][x] = col[ch]; }));
+    if (hat) {                                // small hat perched on top so his hair still shows
+      const y = CH - art.length - 1;
+      for (let x = 7; x <= 9; x++) g[y][x] = '#f4f8ff';
+      g[y - 1][8] = '#d62f3a'; g[y - 1][9] = '#d62f3a'; g[y - 1][10] = '#f4f8ff';
+    }
+    return g;
+  }
   function paint(cv, grid, s) {
     cv.width = CW * s; cv.height = CH * s;
     const ctx = cv.getContext('2d');
@@ -355,14 +387,15 @@
     const layer = $('walkers'), s = innerWidth < 520 ? 3 : 4, w0 = CW * s;
     const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const maxY = 46;
-    const names = people.map(p => p.name).filter(n => PEOPLE[n]);
+    const names = people.map(p => p.name).concat(KIDS).filter(n => PEOPLE[n]);
+    const SPEED = { young: .6, mid: .42, old: .25, kid: .55, small: .5, toddler: .3, baby: .18 };
     const walkers = names.map((n, i, all) => {
       const p = PEOPLE[n], el = document.createElement('div'), cv = document.createElement('canvas'), lab = document.createElement('span');
       el.className = 'walker'; lab.textContent = n; el.append(cv, lab); layer.append(el);
       const w = { p, el, cv, frame: 0, tick: 0, pause: 0, vy: 0,
         x: reduce ? (i + .5) * (innerWidth / all.length) - w0 / 2 : Math.random() * Math.max(60, innerWidth - w0),
         y: reduce ? 0 : Math.random() * maxY, dir: Math.random() < .5 ? -1 : 1,
-        v: (p.age === 'old' ? .25 : p.age === 'young' ? .6 : .42) + Math.random() * .15 };
+        v: SPEED[p.age] + Math.random() * .15 };
       paint(cv, charGrid(p, 0, null, true), s);
       return w;
     });
