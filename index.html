@@ -328,6 +328,11 @@
         for (let y = ty; y <= ty + 1; y++) { set(3, y, hair); set(8, y, hair); }   // falls over the jumper
       }
     }
+
+    // santa hat: white brim over the top of the head, red cone flopping right, white bobble
+    row(hx(3), hx(8), top, '#f4f8ff');
+    row(hx(4), hx(7), top - 1, '#d62f3a'); set(hx(4), top - 1, '#a3202b');
+    set(hx(6), top - 2, '#d62f3a'); set(hx(7), top - 2, '#d62f3a'); set(hx(8), top - 2, '#f4f8ff');
     return g;
   }
   function paint(cv, grid, s) {
