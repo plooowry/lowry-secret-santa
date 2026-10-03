@@ -24,6 +24,9 @@
   h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
        color: var(--gold); text-shadow: 3px 3px 0 var(--red-d), 6px 6px 0 #000; }
   .sub { text-align: center; color: #bcd0ff; margin: 0 0 16px; }
+  .music-btn { position: fixed; top: 10px; right: 10px; z-index: 10; margin: 0; font-size: 10px; padding: 10px 12px; }
+  @media (max-width: 640px) { .music-btn { top: 6px; right: 6px; padding: 8px 9px; } .music-btn .long { display: none; } }
+  .music-btn[aria-pressed="true"] { background: var(--green); box-shadow: inset -4px -4px 0 var(--green-d), inset 4px 4px 0 #6fdc8c, 0 4px 0 #000; }
   .countdown-title { text-align: center; color: var(--gold); margin: 6px 0 8px; font-size: 22px; }
   .countdown { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
   .countdown .unit { background: var(--red); min-width: 72px; padding: 10px 8px 6px; text-align: center;
@@ -104,6 +107,7 @@
 </head>
 <body>
 <canvas id="snow"></canvas>
+<button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
 <main>
   <h1>Lowry Family<br>Secret Santa</h1>
   <p class="sub">Merry Christmas, everyone!</p>
@@ -431,6 +435,138 @@
       title.textContent = 'Countdown to Christmas'; box.classList.remove('hidden');
     }
     tick(); setInterval(tick, 1000);
+  })();
+
+  /* ---------- background chiptune: a quiet looping carol medley, built from Web Audio oscillators ---------- */
+  const SEMI = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const freq = n => {   // 'C5', 'F#4' -> Hz
+    const m = n.match(/^([A-G])(#|b)?(\d)$/);
+    const midi = (+m[3] + 1) * 12 + SEMI[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0);
+    return 440 * Math.pow(2, (midi - 69) / 12);
+  };
+  // melody: NOTE:beats separated into bars by '|', R = rest. chords: one root per bar, '-' = no bass
+  const SONGS = [
+    { bpm: 100, bells: true,   // Jingle Bells
+      melody: `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
+               F5:1 F5:1 F5:1.5 F5:.5 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | E5:1 D5:1 D5:1 E5:1 | D5:2 G5:2 |
+               E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
+               F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | G5:1 G5:1 F5:1 D5:1 | C5:4`,
+      chords: 'C C C C F C D G C C C C F C G C' },
+    { bpm: 96,                 // We Wish You a Merry Christmas (3/4, with a pickup)
+      melody: `R:2 D5:1 | G5:1 G5:.5 A5:.5 G5:.5 F#5:.5 | E5:1 E5:1 E5:1 | A5:1 A5:.5 B5:.5 A5:.5 G5:.5 | F#5:1 D5:1 D5:1 |
+               B5:1 B5:.5 C6:.5 B5:.5 A5:.5 | G5:1 E5:1 D5:.5 D5:.5 | E5:1 A5:1 F#5:1 | G5:3`,
+      chords: '- G C A D B C D G' },
+    { bpm: 92,                 // Deck the Halls
+      melody: `G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2 |
+               G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2`,
+      chords: 'C C G C C C G C' }
+  ];
+  // turns a song into timed events (times and lengths in beats)
+  function songEvents(song) {
+    const ev = [], bars = song.melody.split('|').map(b => b.trim().split(/\s+/).filter(Boolean));
+    const chords = song.chords.split(/\s+/);
+    let t = 0;
+    bars.forEach((bar, i) => {
+      const len = bar.reduce((s, tok) => s + +tok.split(':')[1], 0), start = t;
+      bar.forEach(tok => { const [n, d] = tok.split(':'); if (n !== 'R') ev.push({ t, d: +d, f: freq(n), v: 'lead' }); t += +d; });
+      if (chords[i] && chords[i] !== '-') {
+        const root = freq(chords[i] + ('CDEF'.includes(chords[i][0]) ? '3' : '2')), fifth = root * Math.pow(2, -5 / 12);
+        for (let b = 0; b < len; b++) {
+          ev.push({ t: start + b, d: .9, f: (b === 0 || (len === 4 && b === 2)) ? root : fifth, v: 'bass' });
+          if (song.bells) ev.push({ t: start + b + .5, d: .1, v: 'bell' });
+        }
+      }
+    });
+    ev.sort((a, b) => a.t - b.t);
+    return { ev, beats: t, barLen: bars[bars.length - 1].reduce((s, tok) => s + +tok.split(':')[1], 0) };
+  }
+  const music = (() => {
+    let ctx, master, wet, noise, timer = null, song = 0, cur, idx = 0, start = 0;
+    function setup() {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain(); master.gain.value = 0; master.connect(ctx.destination);
+      const delay = ctx.createDelay(); delay.delayTime.value = .33;           // soft echo
+      const fb = ctx.createGain(); fb.gain.value = .28; wet = ctx.createGain(); wet.gain.value = .3;
+      wet.connect(delay); delay.connect(fb); fb.connect(delay); delay.connect(master);
+      noise = ctx.createBuffer(1, ctx.sampleRate * .2, ctx.sampleRate);
+      const data = noise.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    }
+    function play(e, at, spb) {
+      const end = at + e.d * spb;
+      if (e.v === 'bell') {                                                   // tiny sleigh-bell tick
+        const s = ctx.createBufferSource(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+        s.buffer = noise; hp.type = 'highpass'; hp.frequency.value = 7000;
+        g.gain.setValueAtTime(.05, at); g.gain.exponentialRampToValueAtTime(.001, at + .06);
+        s.connect(hp); hp.connect(g); g.connect(master); s.start(at); s.stop(at + .08);
+        return;
+      }
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      let hold;
+      if (e.v === 'lead') {                                                   // 8-bit square lead, softened
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2000;
+        o.type = 'square'; o.connect(lp); lp.connect(g); g.connect(wet);
+        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.09, at + .01);
+        g.gain.linearRampToValueAtTime(.06, at + .1); hold = .06;
+      } else {                                                                // triangle bass
+        o.type = 'triangle'; o.connect(g);
+        g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(.22, at + .01); hold = .22;
+      }
+      g.connect(master);
+      g.gain.setValueAtTime(hold, Math.max(at + .1, end - .06));             // hold, then short release
+      g.gain.linearRampToValueAtTime(0, end);
+      o.frequency.value = e.f; o.start(at); o.stop(end + .02);
+    }
+    function schedule() {                     // look-ahead scheduler: queue anything due in the next 0.3s
+      const spb = 60 / SONGS[song].bpm;
+      while (ctx.currentTime + .3 > start + (idx < cur.ev.length ? cur.ev[idx].t : cur.beats + cur.barLen) * spb) {
+        if (idx < cur.ev.length) { const e = cur.ev[idx++]; play(e, start + e.t * spb, spb); continue; }
+        start += (cur.beats + cur.barLen) * spb;  // a bar's rest, then the next carol
+        song = (song + 1) % SONGS.length; cur = songEvents(SONGS[song]); idx = 0;
+        return;
+      }
+    }
+    return {
+      get on() { return timer !== null; },
+      start() {
+        if (!ctx) setup();
+        ctx.resume();
+        if (timer) return;
+        cur = songEvents(SONGS[song]); idx = 0; start = ctx.currentTime + .15;
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+        master.gain.linearRampToValueAtTime(.5, ctx.currentTime + 1);
+        timer = setInterval(schedule, 50); schedule();
+      },
+      stop() {
+        if (!timer) return;
+        clearInterval(timer); timer = null;
+        master.gain.cancelScheduledValues(ctx.currentTime);
+        master.gain.setValueAtTime(master.gain.value, ctx.currentTime);
+        master.gain.linearRampToValueAtTime(0, ctx.currentTime + .4);
+      }
+    };
+  })();
+  (function musicButton() {
+    const btn = $('musicBtn'), KEY = 'lowrySantaMusic';
+    const pref = () => { try { return localStorage.getItem(KEY) === '1'; } catch { return false; } };
+    const save = on => { try { localStorage.setItem(KEY, on ? '1' : '0'); } catch {} };
+    const label = () => {
+      const on = music.on || pref();
+      btn.innerHTML = `♫ <span class="long">Music: </span>${on ? 'on' : 'off'}`;
+      btn.setAttribute('aria-pressed', on); btn.setAttribute('aria-label', on ? 'Music on' : 'Music off');
+    };
+    btn.onclick = e => {
+      e.stopPropagation();
+      if (music.on) { music.stop(); save(false); } else { music.start(); save(true); }
+      label();
+    };
+    // browsers only allow sound after a tap, so if it was on last time, start on the first tap anywhere
+    if (pref()) {
+      const go = () => { if (pref() && !music.on) music.start(); label(); };
+      document.addEventListener('pointerdown', go, { once: true });
+      document.addEventListener('keydown', go, { once: true });
+    }
+    label();
   })();
 
   /* ---------- api ---------- */
