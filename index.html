@@ -24,8 +24,11 @@
   h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
        color: var(--gold); text-shadow: 3px 3px 0 var(--red-d), 6px 6px 0 #000; }
   .sub { text-align: center; color: #bcd0ff; margin: 0 0 16px; }
-  .music-btn { position: fixed; top: 10px; right: 10px; z-index: 10; margin: 0; font-size: 10px; padding: 10px 12px; }
-  @media (max-width: 640px) { .music-btn { top: 6px; right: 6px; padding: 8px 9px; } .music-btn .long { display: none; } }
+  .music-bar { position: fixed; top: 10px; right: 10px; z-index: 10; display: flex; align-items: center; gap: 8px; }
+  .music-bar .btn { margin: 0; font-size: 10px; padding: 10px 12px; }
+  .now-playing { font-size: 18px; color: #ffe9b0; text-shadow: 2px 2px 0 #000; white-space: nowrap; }
+  @media (max-width: 640px) { main { padding-top: 48px; } .music-bar { top: 6px; right: 6px; gap: 6px; } .music-bar .btn { padding: 8px 9px; }
+                              .music-btn .long, .now-playing { display: none; } }
   .music-btn[aria-pressed="true"] { background: var(--green); box-shadow: inset -4px -4px 0 var(--green-d), inset 4px 4px 0 #6fdc8c, 0 4px 0 #000; }
   .countdown-title { text-align: center; color: var(--gold); margin: 6px 0 8px; font-size: 22px; }
   .countdown { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
@@ -107,7 +110,11 @@
 </head>
 <body>
 <canvas id="snow"></canvas>
-<button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
+<div class="music-bar">
+  <span class="now-playing" id="nowPlaying" aria-live="polite"></span>
+  <button class="btn ghost hidden" id="skipBtn" aria-label="Skip to next song" title="Next song">⏭</button>
+  <button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
+</div>
 <main>
   <h1>Lowry Family<br>Secret Santa</h1>
   <p class="sub">Merry Christmas, everyone!</p>
@@ -489,17 +496,17 @@
   };
   // melody: NOTE:beats separated into bars by '|', R = rest. chords: one root per bar, '-' = no bass
   const SONGS = [
-    { bpm: 120,                // Jingle Bells
+    { title: 'Jingle Bells', bpm: 120,
       melody: `E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
                F5:1 F5:1 F5:1.5 F5:.5 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | E5:1 D5:1 D5:1 E5:1 | D5:2 G5:2 |
                E5:1 E5:1 E5:2 | E5:1 E5:1 E5:2 | E5:1 G5:1 C5:1.5 D5:.5 | E5:4 |
                F5:1 F5:1 F5:1 F5:1 | F5:1 E5:1 E5:1 E5:.5 E5:.5 | G5:1 G5:1 F5:1 D5:1 | C5:4`,
       chords: 'C C C C F C D G C C C C F C G C' },
-    { bpm: 116,                // We Wish You a Merry Christmas (3/4, starts on a one-beat pickup)
+    { title: 'We Wish You a Merry Christmas', bpm: 116,   // 3/4, starts on a one-beat pickup
       melody: `D5:1 | G5:1 G5:.5 A5:.5 G5:.5 F#5:.5 | E5:1 E5:1 E5:1 | A5:1 A5:.5 B5:.5 A5:.5 G5:.5 | F#5:1 D5:1 D5:1 |
                B5:1 B5:.5 C6:.5 B5:.5 A5:.5 | G5:1 E5:1 D5:.5 D5:.5 | E5:1 A5:1 F#5:1 | G5:3`,
       chords: 'D G C A D B C D G' },
-    { bpm: 112,                // Deck the Halls
+    { title: 'Deck the Halls', bpm: 112,
       melody: `G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2 |
                G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2`,
       chords: 'C C G C C C G C' }
@@ -573,11 +580,22 @@
         if (idx < cur.ev.length) { const e = cur.ev[idx++]; play(e, start + e.t * spb, spb); continue; }
         start += cur.beats * spb;                  // next carol starts straight away
         song = (song + 1) % SONGS.length; cur = songEvents(SONGS[song]); idx = 0;
+        api.onSong();
         return;
       }
     }
-    return {
+    const api = {
+      onSong() {},                             // set by the music bar to show the title
+      get title() { return SONGS[song].title; },
       get on() { return timer !== null; },
+      next() {                                 // skip: quick dip in volume, then the next carol from its start
+        if (!timer) return;
+        const t = ctx.currentTime;
+        master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t);
+        master.gain.linearRampToValueAtTime(0, t + .12); master.gain.linearRampToValueAtTime(.5, t + .6);
+        song = (song + 1) % SONGS.length; cur = songEvents(SONGS[song]); idx = 0; start = t + .3;
+        api.onSong();
+      },
       start() {
         if (!ctx) setup();
         ctx.resume();
@@ -596,6 +614,7 @@
         master.gain.linearRampToValueAtTime(0, ctx.currentTime + .4);
       }
     };
+    return api;
   })();
   (function musicButton() {
     const btn = $('musicBtn'), KEY = 'lowrySantaMusic';
@@ -605,7 +624,11 @@
       const on = music.on || pref();
       btn.innerHTML = `♫ <span class="long">Music: </span>${on ? 'on' : 'off'}`;
       btn.setAttribute('aria-pressed', on); btn.setAttribute('aria-label', on ? 'Music on' : 'Music off');
+      $('skipBtn').classList.toggle('hidden', !music.on);
+      $('nowPlaying').textContent = music.on ? '♪ ' + music.title : '';
     };
+    music.onSong = label;
+    $('skipBtn').onclick = e => { e.stopPropagation(); music.next(); };
     btn.onclick = e => {
       e.stopPropagation();
       if (music.on) { music.stop(); save(false); } else { music.start(); save(true); }
