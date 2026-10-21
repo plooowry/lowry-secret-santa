@@ -10,7 +10,6 @@ Live at **https://lowry-secret-santa.vercel.app**
 - The draw runs automatically the first time anyone logs in. It's one random loop through all 10 people, so everyone gives to one person and receives from one. Nobody gets themselves or their partner.
 - After logging in you see who you're buying for, their wish list and the rules (£50 limit).
 - Everyone keeps their own wish list, which their Secret Santa can see.
-- On Christmas Day (from midnight UK time) the Big Reveal unlocks: an animation of the whole gift loop showing who had who. The database won't release it any earlier.
 
 ## Files
 
