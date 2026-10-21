@@ -106,6 +106,20 @@
   .walker canvas { display: block; image-rendering: pixelated; }
   .walker span { position: absolute; left: 50%; top: 100%; transform: translateX(-50%); margin-top: 1px; white-space: nowrap;
                  font-size: 18px; line-height: 1; color: #fff; text-shadow: 2px 2px 0 #000; }
+  /* first-login intro: Santa explains the rules, then flies off in his sleigh */
+  .santa-intro { position: fixed; inset: 0; z-index: 30; background: rgba(10, 18, 42, .82); display: flex; align-items: center; justify-content: center; padding: 16px; transition: opacity .6s; }
+  .santa-intro.fade { opacity: 0; }
+  #santaTrail { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .santa-stage { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 520px; width: 100%; }
+  .santa-bubble { position: relative; background: var(--paper); color: var(--ink); border: 4px solid var(--ink); padding: 14px 16px 10px; width: 100%; box-shadow: 8px 8px 0 rgba(0,0,0,.4); }
+  .santa-bubble::after { content: ''; position: absolute; left: 50%; bottom: -16px; margin-left: -8px; border: 8px solid transparent; border-top-color: var(--ink); }
+  .santa-bubble p { margin: 0 0 6px; min-height: 3.6em; font-size: 24px; }
+  .santa-btns { display: flex; justify-content: space-between; gap: 10px; }
+  .santa-btns .btn { margin: 0; }
+  .santa-sprite { animation: santa-drop .9s steps(9) both; }
+  @keyframes santa-drop { from { transform: translateY(-110vh); } 80% { transform: translateY(8px); } to { transform: translateY(0); } }
+  .santa-bubble.gone { visibility: hidden; }
+  @media (prefers-reduced-motion: reduce) { .santa-sprite { animation: none; } }
   .setup { background: #fff3cd; color: #5a4300; padding: 12px; border: 4px solid #5a4300; margin: 18px 6px; }
 </style>
 </head>
@@ -201,6 +215,19 @@
   </section>
 </main>
 <div id="walkers" class="walkers-layer" aria-hidden="true"></div>
+<div class="santa-intro hidden" id="santaIntro" role="dialog" aria-modal="true" aria-label="Santa explains the rules">
+  <canvas id="santaTrail" aria-hidden="true"></canvas>
+  <div class="santa-stage">
+    <div class="santa-bubble" id="santaBubble">
+      <p id="santaText" aria-live="polite"></p>
+      <div class="santa-btns">
+        <button class="btn ghost" id="santaSkip">Skip</button>
+        <button class="btn green" id="santaNext">Next ▶</button>
+      </div>
+    </div>
+    <canvas class="sprite santa-sprite" id="santaSprite"></canvas>
+  </div>
+</div>
 
 <script src="config.js"></script>
 <script>
@@ -264,7 +291,7 @@
       if (PAL[ch]) { ctx.fillStyle = PAL[ch]; ctx.fillRect(x * s, y * s, s, s); }
     }));
   }
-  function drawAllSprites() { document.querySelectorAll('canvas.sprite').forEach(drawSprite); }
+  function drawAllSprites() { document.querySelectorAll('canvas.sprite[data-sprite]').forEach(drawSprite); }
 
   /* ---------- the family, in pixels ---------- */
   const BLONDE = '#f2d16b', BROWN = '#7a4a21', DARK_BROWN = '#3b2417', GINGER = '#c8602a', GREY = '#cfd3d8';
@@ -640,6 +667,119 @@
     label();
   })();
 
+  /* ---------- first login: Santa drops in, explains the rules, then flies off in his sleigh ---------- */
+  const SANTA_COL = { R: '#d62f3a', D: '#8e1c26', W: '#f4f8ff', S: '#f6d3b0', K: '#1a1a2e', Y: '#ffd23f', P: '#f2a29a', N: '#8a5a2b', A: '#c9a46b' };
+  const SANTA_ART = [
+    '...........WW...',
+    '......RRRR.WW...',
+    '.....RRRRRRR....',
+    '....WWWWWWWW....',
+    '....SSSSSSSS....',
+    '....SKSSSSKS....',
+    '...WPSSSSSSPW...',
+    '...WWWWDDWWWW...',
+    '...WWWWWWWWWW...',
+    '....WWWWWWWW....',
+    '..RRRWWWWWWRRR..',
+    '.RRRRRWWWWRRRRR.',
+    '.SRRRRRWWRRRRRS.',
+    '..RRRRRRRRRRRR..',
+    '..KKKKKYYKKKKK..',
+    '..RRRRRRRRRRRR..',
+    '..WWWWWWWWWWWW..',
+    '...RRRR..RRRR...',
+    '...KKKK..KKKK...',
+    '..KKKKK..KKKKK..'
+  ];
+  const SLEIGH_ART = [
+    '......W.......................A.A.',
+    '.......RRR.....................AA.',
+    '......WWWWW...................NNNN',
+    '......SKSKS...................NKNR',
+    '......WWDWW..............NNNNNN...',
+    '.R...RWWWWWR.....YYYYYYYNNNNNNN...',
+    '.RRRRRRRRRRRRRRR.......NNNNNNNN...',
+    '..RRRRRRYYRRRRR........N.N...N.N..',
+    '...RRRRRRRRRRR........N...N.N...N.',
+    '...Y.......Y......................',
+    'YYYYYYYYYYYYYYY...................'
+  ];
+  function paintArt(cv, art, s, wave) {      // wave 1/2 = right arm raised, hand swaying
+    const g = art.map(r => [...r]);
+    if (wave) { g[12][14] = '.'; g[11][14] = 'R'; g[10][15] = 'R'; g[9][15] = 'R'; g[wave === 1 ? 8 : 7][15] = 'S'; }
+    cv.width = g[0].length * s; cv.height = g.length * s;
+    const c = cv.getContext('2d');
+    g.forEach((r, y) => r.forEach((ch, x) => { if (SANTA_COL[ch]) { c.fillStyle = SANTA_COL[ch]; c.fillRect(x * s, y * s, s, s); } }));
+  }
+
+  function santaIntro(name) {
+    const box = $('santaIntro'), sprite = $('santaSprite'), text = $('santaText'), next = $('santaNext'), bubble = $('santaBubble');
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const s = innerWidth < 520 ? 6 : 8;
+    const lines = [
+      `Ho ho ho! Welcome to the Lowry Family Secret Santa, ${name}!`,
+      "My elves have already drawn names. Tap “Open your gift tag” to see who you're buying a present for.",
+      'The rules: spend up to £50. Their wish list is just ideas, so pick from it or surprise them!',
+      "Shhh! Keep it secret. Don't tell anyone who you've got, not even your partner.",
+      'Last thing: fill in your own wish list so your Secret Santa knows what you’d like. Merry Christmas!'
+    ];
+    let i = -1, typing = null, wave = null, done = false;
+    paintArt(sprite, SANTA_ART, s);
+    sprite.style.transform = ''; bubble.classList.remove('gone'); box.classList.remove('fade', 'hidden');
+    sprite.style.animation = 'none'; void sprite.offsetWidth; sprite.style.animation = '';   // replay the drop-in
+
+    const talk = on => {                      // Santa waves while he's talking
+      clearInterval(wave); wave = null;
+      if (!on || reduce) { paintArt(sprite, SANTA_ART, s); return; }
+      let k = 0; wave = setInterval(() => paintArt(sprite, SANTA_ART, s, (k++ % 2) + 1), 280);
+    };
+    const show = () => {
+      clearInterval(typing);
+      const line = lines[i]; let n = 0;
+      next.textContent = i === lines.length - 1 ? 'Got it!' : 'Next ▶';
+      if (reduce) { text.textContent = line; return; }
+      text.textContent = ''; talk(true);
+      typing = setInterval(() => {
+        text.textContent = line.slice(0, ++n);
+        if (n >= line.length) { clearInterval(typing); typing = null; talk(false); }
+      }, 26);
+    };
+    const finish = () => {                    // hop in the sleigh and fly off up and away
+      if (done) return; done = true;
+      clearInterval(typing); talk(false);
+      bubble.classList.add('gone');
+      if (reduce) return close();
+      paintArt(sprite, SLEIGH_ART, s - 2);
+      sprite.style.animation = 'none';
+      const trail = $('santaTrail'), tc = trail.getContext('2d'); trail.width = innerWidth; trail.height = innerHeight;
+      const r0 = sprite.getBoundingClientRect(), sparks = [], t0 = performance.now(), dur = 2200;
+      (function fly(now) {
+        const t = Math.min(1, (now - t0) / dur), e = t * t;   // speeds up as he takes off
+        const dx = e * (innerWidth - r0.left + 60), dy = -Math.sin(t * Math.PI * .5) * (r0.top + r0.height + 60) - Math.sin(t * 9) * 6;
+        sprite.style.transform = `translate(${dx}px, ${dy}px)`;
+        sparks.push({ x: r0.left + dx + 4, y: r0.top + dy + r0.height - 4, age: 0, c: Math.random() < .5 ? '#ffd23f' : '#ffffff' });
+        tc.clearRect(0, 0, trail.width, trail.height);
+        sparks.forEach(p => { p.age += 1; p.y += .4; const a = 1 - p.age / 60; if (a > 0) { tc.globalAlpha = a; tc.fillStyle = p.c; tc.fillRect(Math.round(p.x + (Math.random() - .5) * 6), Math.round(p.y), 4, 4); } });
+        tc.globalAlpha = 1;
+        if (t < 1) requestAnimationFrame(fly); else close();
+      })(t0);
+    };
+    const close = () => {
+      box.classList.add('fade');
+      setTimeout(() => { box.classList.add('hidden'); box.classList.remove('fade'); const tc = $('santaTrail').getContext('2d'); tc.clearRect(0, 0, innerWidth, innerHeight); }, 600);
+      document.removeEventListener('keydown', onKey);
+    };
+    const advance = () => {
+      if (typing) { clearInterval(typing); typing = null; text.textContent = lines[i]; talk(false); return; }   // finish the line first
+      if (++i < lines.length) show(); else finish();
+    };
+    const onKey = e => { if (e.key === 'Escape') finish(); };
+    next.onclick = e => { e.stopPropagation(); advance(); };
+    $('santaSkip').onclick = e => { e.stopPropagation(); finish(); };
+    document.addEventListener('keydown', onKey);
+    setTimeout(() => { advance(); next.focus(); }, reduce ? 0 : 900);   // start talking once he has landed
+  }
+
   /* ---------- api ---------- */
   async function rpc(fn, args) {
     const r = await fetch(`${CFG.url}/rest/v1/rpc/${fn}`, {
@@ -722,10 +862,11 @@
       if (pin !== $('pinConfirm').value.trim()) { $('pinErr').textContent = "Those two PINs don't match"; return; }
     }
     try {
-      await rpc('santa_login', { w: state.picked, p: pin });
+      const r = await rpc('santa_login', { w: state.picked, p: pin });
       state.me = state.picked; state.pin = pin;
       store.set({ me: state.me, pin });
       await enterHome();
+      if (r && r.first) santaIntro(person(state.me).name);   // first ever login: Santa explains the rules
     } catch (e) { $('pinErr').textContent = e.message; }
   }
 
@@ -821,6 +962,7 @@
         state.me = saved.me; state.pin = saved.pin;
         startWalkers(state.people);
         await enterHome();
+        if (new URLSearchParams(location.search).has('santa-intro')) santaIntro(person(state.me).name);   // preview link
       } catch { store.clear(); state.me = state.pin = null; }
     }
     if (!state.me) await loadPick();
