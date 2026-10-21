@@ -539,7 +539,12 @@
     { bpm: 112,                // Deck the Halls
       melody: `G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2 |
                G5:1.5 F5:.5 E5:1 D5:1 | C5:1 D5:1 E5:1 C5:1 | D5:.5 E5:.5 F5:.5 D5:.5 E5:1.5 D5:.5 | C5:1 B4:1 C5:2`,
-      chords: 'C C G C C C G C' }
+      chords: 'C C G C C C G C' },
+    { bpm: 90, noBells: true,   // Silent Night (3/4, gentle, no sleigh bells)
+      melody: `G4:1.5 A4:.5 G4:1 | E4:3 | G4:1.5 A4:.5 G4:1 | E4:3 | D5:2 D5:1 | B4:3 | C5:2 C5:1 | G4:3 |
+               A4:2 A4:1 | C5:1.5 B4:.5 A4:1 | G4:1.5 A4:.5 G4:1 | E4:3 | A4:2 A4:1 | C5:1.5 B4:.5 A4:1 | G4:1.5 A4:.5 G4:1 | E4:3 |
+               D5:2 D5:1 | F5:1.5 D5:.5 B4:1 | C5:3 | E5:3 | C5:1.5 G4:.5 E4:1 | G4:1.5 F4:.5 D4:1 | C4:3 | R:3`,
+      chords: 'C C C C G G C C F F C C F F C C G G C C C G C C' }
   ];
   // turns a song into timed events (times and lengths in beats)
   function songEvents(song) {
@@ -553,7 +558,7 @@
         const root = freq(chords[i] + ('CDEF'.includes(chords[i][0]) ? '3' : '2')), fifth = root * Math.pow(2, -5 / 12);
         for (let b = 0; b < len; b++) {
           ev.push({ t: start + b, d: .9, f: (b === 0 || (len === 4 && b === 2)) ? root : fifth, v: 'bass' });
-          ev.push({ t: start + b, d: .1, v: 'bell', g: .06 }, { t: start + b + .5, d: .1, v: 'bell', g: .035 });   // sleigh bells
+          if (!song.noBells) ev.push({ t: start + b, d: .1, v: 'bell', g: .06 }, { t: start + b + .5, d: .1, v: 'bell', g: .035 });   // sleigh bells
         }
       }
     });
