@@ -24,7 +24,8 @@
   h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
        color: var(--gold); text-shadow: 3px 3px 0 var(--red-d), 6px 6px 0 #000; }
   .sub { text-align: center; color: #bcd0ff; margin: 0 0 16px; }
-  .music-bar { position: fixed; top: 10px; right: 10px; z-index: 10; display: flex; align-items: center; gap: 8px; }
+  .music-bar { position: fixed; top: 10px; right: 10px; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+  .music-row { display: flex; align-items: center; gap: 8px; }
   .music-bar .btn { margin: 0; font-size: 10px; padding: 10px 12px; }
   .now-playing { font-size: 18px; color: #ffe9b0; text-shadow: 2px 2px 0 #000; white-space: nowrap; }
   @media (max-width: 640px) { main { padding-top: 48px; } .music-bar { top: 6px; right: 6px; gap: 6px; } .music-bar .btn { padding: 8px 9px; }
@@ -111,9 +112,11 @@
 <body>
 <canvas id="snow"></canvas>
 <div class="music-bar">
-  <span class="now-playing" id="nowPlaying" aria-live="polite"></span>
-  <button class="btn ghost hidden" id="skipBtn" aria-label="Skip to next song" title="Next song">⏭</button>
   <button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
+  <div class="music-row">
+    <span class="now-playing" id="nowPlaying" aria-live="polite"></span>
+    <button class="btn ghost hidden" id="skipBtn" aria-label="Skip to next song" title="Next song">⏭</button>
+  </div>
 </div>
 <main>
   <h1>Lowry Family<br>Secret Santa</h1>
