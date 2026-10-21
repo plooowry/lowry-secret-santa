@@ -15,8 +15,9 @@ create table if not exists public.people (
 );
 
 create table if not exists public.settings (
-  id    int primary key default 1 check (id = 1),
-  drawn boolean not null default false
+  id        int primary key default 1 check (id = 1),
+  drawn     boolean not null default false,
+  reveal_at timestamptz not null default '2026-12-25 00:00:00 Europe/London'   -- when the big reveal unlocks
 );
 
 alter table public.people   enable row level security;
@@ -117,10 +118,39 @@ begin
     'recipient', json_build_object('id', r.id, 'name', r.name, 'wishlist', r.wishlist));
 end $$;
 
+-- internal: the whole gift loop in order, starting from person 1 (each name gives to the next; the last gives to the first)
+create or replace function public._santa_chain()
+returns json language plpgsql security definer set search_path = public as $$
+declare cur int := 1; names text[] := '{}'; n int; i int := 0;
+begin
+  select count(*) into n from people;
+  loop
+    names := names || (select name from people where id = cur);
+    select gives_to into cur from people where id = cur;
+    i := i + 1;
+    exit when cur is null or cur = 1 or i >= n;
+  end loop;
+  return to_json(names);
+end $$;
+
+-- Christmas Day big reveal (logged-in only): before reveal_at it just says when; from then it returns the whole loop
+create or replace function public.santa_reveal(w int, p text)
+returns json language plpgsql security definer set search_path = public, extensions as $$
+declare at timestamptz; d boolean;
+begin
+  perform _santa_auth(w, p);
+  select reveal_at, drawn into at, d from settings where id = 1;
+  if now() < at or not d then
+    return json_build_object('ready', false, 'at', at);
+  end if;
+  return json_build_object('ready', true, 'chain', _santa_chain());
+end $$;
+
 revoke all on function public._santa_auth(int, text) from public, anon, authenticated;
+revoke all on function public._santa_chain() from public, anon, authenticated;
 revoke all on function public._santa_do_draw() from public, anon, authenticated;
-revoke all on function public.santa_status(), public.santa_login(int, text), public.santa_me(int, text), public.santa_save_wishlist(int, text, text) from public;
+revoke all on function public.santa_status(), public.santa_login(int, text), public.santa_me(int, text), public.santa_save_wishlist(int, text, text), public.santa_reveal(int, text) from public;
 grant execute on function
   public.santa_status(), public.santa_login(int, text), public.santa_me(int, text),
-  public.santa_save_wishlist(int, text, text)
+  public.santa_save_wishlist(int, text, text), public.santa_reveal(int, text)
 to anon;

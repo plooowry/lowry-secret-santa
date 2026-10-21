@@ -94,6 +94,18 @@
   .rules ol { margin: 0; padding-left: 26px; }
   .rules li { margin: 6px 0; }
   .rules b { color: var(--red-d); font-weight: normal; }
+  .muted { color: #6b6f8d; }
+  .ring { position: relative; width: min(100%, 520px); aspect-ratio: 1; margin: 6px auto 0; }
+  .ring canvas#ringLines { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .ring-person { position: absolute; transform: translate(-50%, -50%); text-align: center; transition: transform .15s steps(2); }
+  .ring-person canvas { display: block; margin: 0 auto; }
+  .ring-person span { display: block; font-size: 18px; line-height: 1; margin-top: 2px; }
+  .ring-person.giving { transform: translate(-50%, -60%); }
+  .ring-person.got span { color: var(--red-d); }
+  .ring-gift { position: absolute; left: 0; top: 0; pointer-events: none; }
+  .ring-caption { font-family: 'Press Start 2P', monospace; font-size: clamp(12px, 3.6vw, 18px); line-height: 1.6; color: var(--red-d); min-height: 2em; margin: 10px 0 4px; }
+  .ring-list { text-align: left; display: table; margin: 4px auto 8px; padding-left: 28px; }
+  .ring-list li { margin: 2px 0; }
   .match { display: flex; justify-content: center; align-items: flex-end; gap: 18px; margin: 8px 0; }
   .gifts { display: flex; justify-content: center; gap: 10px; margin: 8px 0; }
   .hidden { display: none !important; }
@@ -178,6 +190,21 @@
           </ol>
         </div>
         <button class="btn ghost" id="hideBtn">Hide</button>
+      </div>
+    </div>
+
+    <div class="panel centre hidden" id="bigPanel">
+      <h2>The Big Reveal</h2>
+      <div id="bigTeaser">
+        <canvas class="sprite" data-sprite="gift2" data-scale="6"></canvas>
+        <p>On Christmas Day, come back here to see who had who!</p>
+        <p class="muted">Unlocks at midnight on 25 December.</p>
+      </div>
+      <div id="bigShow" class="hidden">
+        <div class="ring" id="ring"><canvas id="ringLines"></canvas></div>
+        <p class="ring-caption" id="ringCaption"></p>
+        <ol class="ring-list" id="ringList"></ol>
+        <button class="btn" id="replayBtn">Watch again</button>
       </div>
     </div>
 
@@ -747,7 +774,7 @@
       renderRoom();
       if (state.drawn || first) {
         const me = await rpc('santa_me', { w: state.me, p: state.pin });
-        if (first) $('wish').value = me.wishlist || '';
+        if (first) { $('wish').value = me.wishlist || ''; loadBigReveal(); }
         if (me.drawn && me.recipient) {
           const r = me.recipient;
           $('recAvatar').innerHTML = '';
@@ -763,12 +790,90 @@
     } catch (e) { /* transient (network blip); next poll will retry */ }
   }
 
+  /* ---------- Christmas Day: the big reveal of the whole gift loop ---------- */
+  let bigChain = null, bigAt = 0, bigRun = 0;   // bigAt: unlock time (ms) while still locked
+  async function loadBigReveal() {
+    try {
+      const r = await rpc('santa_reveal', { w: state.me, p: state.pin });
+      show('bigPanel');
+      if (!r.ready) { bigAt = Date.parse(r.at) || 0; show('bigTeaser'); hide('bigShow'); return; }
+      bigAt = 0; hide('bigTeaser'); show('bigShow');
+      if (!bigChain) { bigChain = r.chain; playBigReveal(bigChain); }
+    } catch (e) { /* try again on the next poll */ }
+  }
+
+  // everyone in a circle; a present travels from each giver to their person in turn
+  function playBigReveal(chain) {
+    const run = ++bigRun, ring = $('ring'), n = chain.length, me = person(state.me);
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    ring.querySelectorAll('.ring-person, .ring-gift').forEach(e => e.remove());
+    $('ringList').innerHTML = ''; $('ringCaption').textContent = '';
+    const size = ring.clientWidth, sc = size < 420 ? 3 : 4, R = .39;
+    const spots = chain.map((name, i) => {
+      const a = -Math.PI / 2 + i / n * Math.PI * 2;
+      const el = document.createElement('div'); el.className = 'ring-person';
+      el.style.left = (50 + Math.cos(a) * R * 100) + '%'; el.style.top = (50 + Math.sin(a) * R * 100) + '%';
+      const lab = document.createElement('span'); lab.textContent = name;
+      el.append(avatar(name, sc), lab); ring.append(el);
+      return { el, name, x: size * (.5 + Math.cos(a) * R), y: size * (.5 + Math.sin(a) * R) };
+    });
+    const lines = $('ringLines'); lines.width = size; lines.height = size;
+    const lc = lines.getContext('2d'); lc.clearRect(0, 0, size, size);
+    const drawLine = (a, b) => {                         // dashed gold arrow from giver to receiver
+      lc.strokeStyle = '#d4a017'; lc.lineWidth = 3; lc.setLineDash([6, 6]);
+      lc.beginPath(); lc.moveTo(a.x, a.y); lc.lineTo(b.x, b.y); lc.stroke();
+      const ang = Math.atan2(b.y - a.y, b.x - a.x), tx = b.x - Math.cos(ang) * 30, ty = b.y - Math.sin(ang) * 30;
+      lc.setLineDash([]); lc.fillStyle = '#d4a017'; lc.beginPath();
+      lc.moveTo(tx, ty); lc.lineTo(tx - Math.cos(ang - .5) * 12, ty - Math.sin(ang - .5) * 12);
+      lc.lineTo(tx - Math.cos(ang + .5) * 12, ty - Math.sin(ang + .5) * 12); lc.closePath(); lc.fill();
+    };
+    const label = name => name + (me && name === me.name ? ' (you)' : '');
+    const addToList = (a, b) => { const li = document.createElement('li'); li.textContent = `${label(a.name)} → ${label(b.name)}`; $('ringList').append(li); };
+    const finale = () => {
+      $('ringCaption').textContent = 'Merry Christmas, everyone!';
+      if (reduce) return;
+      let up = false, k = 0;
+      const wave = setInterval(() => {                   // everyone waves to finish
+        if (run !== bigRun || ++k > 16) { clearInterval(wave); spots.forEach(s => paint(s.el.querySelector('canvas'), charGrid(PEOPLE[s.name], 0), sc)); return; }
+        up = !up; spots.forEach(s => paint(s.el.querySelector('canvas'), charGrid(PEOPLE[s.name], 0, up ? 'wave1' : 'wave2'), sc));
+      }, 260);
+    };
+    if (reduce) {                                        // no animation: show the whole loop at once
+      spots.forEach((a, i) => { const b = spots[(i + 1) % n]; drawLine(a, b); addToList(a, b); });
+      return finale();
+    }
+    const gift = document.createElement('canvas'); gift.className = 'sprite ring-gift';
+    gift.dataset.sprite = 'gift'; gift.dataset.scale = sc - 1; drawSprite(gift); ring.append(gift);
+    const gw = gift.width, gh = gift.height;
+    let i = 0;
+    (function next() {
+      if (run !== bigRun) return;
+      if (i >= n) { gift.remove(); return finale(); }
+      const a = spots[i], b = spots[(i + 1) % n];
+      spots.forEach(s => s.el.classList.remove('giving', 'got'));
+      a.el.classList.add('giving');
+      $('ringCaption').textContent = `${label(a.name)} → ${label(b.name)}`;
+      const t0 = performance.now(), dur = 1100;
+      (function fly() {
+        if (run !== bigRun) return;
+        const t = Math.min(1, (performance.now() - t0) / dur);
+        const x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t - Math.sin(Math.PI * t) * 40;
+        gift.style.transform = `translate(${Math.round(x - gw / 2)}px, ${Math.round(y - gh / 2)}px)`;
+        if (t < 1) return requestAnimationFrame(fly);
+        a.el.classList.remove('giving'); b.el.classList.add('got');
+        drawLine(a, b); addToList(a, b); i++;
+        setTimeout(next, 900);
+      })();
+    })();
+  }
+
   /* ---------- events ---------- */
   $('pinGo').onclick = tryLogin;
   $('pinInput').onkeydown = e => { if (e.key === 'Enter') { if ($('pinConfirm').classList.contains('hidden')) tryLogin(); else $('pinConfirm').focus(); } };
   $('pinConfirm').onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
   $('pinBack').onclick = () => view('pick');
-  $('logout').onclick = () => { store.clear(); state.me = state.pin = null; hide('revealPanel'); loadPick(); };
+  $('logout').onclick = () => { store.clear(); state.me = state.pin = null; hide('revealPanel'); hide('bigPanel'); bigRun++; bigAt = 0; loadPick(); };
+  $('replayBtn').onclick = () => playBigReveal(bigChain);
   $('revealBtn').onclick = () => setRevealed(true, true);
   $('hideBtn').onclick = () => setRevealed(false, true);
   $('saveWish').onclick = async () => {
@@ -806,7 +911,7 @@
     if (!state.me) await loadPick();
     // one poll for everything: the workshop/draw status when logged in, the "who has joined" list on the picker
     setInterval(async () => {
-      if (state.me) return refreshHome(false);
+      if (state.me) { if (bigAt && Date.now() >= bigAt) loadBigReveal(); return refreshHome(false); }
       if (!$('pick').classList.contains('hidden')) {
         try { const st = await rpc('santa_status'); state.people = st.people; renderPick(); } catch {}
       }
