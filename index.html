@@ -201,6 +201,7 @@
         <p class="muted">Unlocks at midnight on 25 December.</p>
       </div>
       <div id="bigShow" class="hidden">
+        <p class="muted hidden" id="bigDemoNote">Demo with made-up pairings. These are NOT the real ones!</p>
         <div class="ring" id="ring"><canvas id="ringLines"></canvas></div>
         <p class="ring-caption" id="ringCaption"></p>
         <ol class="ring-list" id="ringList"></ol>
@@ -792,7 +793,17 @@
 
   /* ---------- Christmas Day: the big reveal of the whole gift loop ---------- */
   let bigChain = null, bigAt = 0, bigRun = 0;   // bigAt: unlock time (ms) while still locked
+  // ?reveal-demo plays the reveal with a random made-up loop, so it can be previewed without spoiling the real draw
+  const REVEAL_DEMO = new URLSearchParams(location.search).has('reveal-demo');
   async function loadBigReveal() {
+    if (REVEAL_DEMO) {
+      if (bigChain) return;
+      const names = state.people.map(p => p.name);
+      for (let i = names.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [names[i], names[j]] = [names[j], names[i]]; }
+      bigChain = names;
+      show('bigPanel'); hide('bigTeaser'); show('bigShow'); show('bigDemoNote');
+      return playBigReveal(bigChain);
+    }
     try {
       const r = await rpc('santa_reveal', { w: state.me, p: state.pin });
       show('bigPanel');
