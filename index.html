@@ -24,13 +24,9 @@
   h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
        color: var(--gold); text-shadow: 3px 3px 0 var(--red-d), 6px 6px 0 #000; }
   .sub { text-align: center; color: #bcd0ff; margin: 0 0 16px; }
-  .music-corner { position: fixed; top: 8px; right: 8px; z-index: 10; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; }
-  .music-nav { display: flex; gap: 6px; }
-  .music-corner .btn { margin: 0; font-size: 8px; padding: 6px 8px;
-                       box-shadow: inset -3px -3px 0 var(--red-d), inset 3px 3px 0 #ff6b73, 0 3px 0 #000; }
-  .music-nav .btn { background: #6b6f8d; box-shadow: inset -3px -3px 0 #3e415c, inset 3px 3px 0 #9a9eb8, 0 3px 0 #000; }
-  @media (max-width: 640px) { .music-corner { top: 6px; right: 6px; } .music-corner .btn { padding: 5px 6px; } .music-btn .long { display: none; } }
-  .btn.music-btn[aria-pressed="true"] { background: var(--green); box-shadow: inset -3px -3px 0 var(--green-d), inset 3px 3px 0 #6fdc8c, 0 3px 0 #000; }
+  .music-btn { position: fixed; top: 10px; right: 10px; z-index: 10; margin: 0; font-size: 10px; padding: 10px 12px; }
+  @media (max-width: 640px) { .music-btn { top: 6px; right: 6px; padding: 8px 9px; } .music-btn .long { display: none; } }
+  .music-btn[aria-pressed="true"] { background: var(--green); box-shadow: inset -4px -4px 0 var(--green-d), inset 4px 4px 0 #6fdc8c, 0 4px 0 #000; }
   .countdown-title { text-align: center; color: var(--gold); margin: 6px 0 8px; font-size: 22px; }
   .countdown { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
   .countdown .unit { background: var(--red); min-width: 72px; padding: 10px 8px 6px; text-align: center;
@@ -125,13 +121,7 @@
 </head>
 <body>
 <canvas id="snow"></canvas>
-<div class="music-corner">
-  <button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
-  <div class="music-nav hidden" id="musicNav">
-    <button class="btn" id="prevSong" aria-label="Previous song" title="Previous song">⏮&#xFE0E;</button>
-    <button class="btn" id="nextSong" aria-label="Next song" title="Next song">⏭&#xFE0E;</button>
-  </div>
-</div>
+<button class="btn music-btn" id="musicBtn" aria-pressed="false">♫ Music: off</button>
 <main>
   <h1>Lowry Family<br>Secret Santa</h1>
   <p class="sub">Merry Christmas, everyone!</p>
@@ -620,13 +610,6 @@
     }
     return {
       get on() { return timer !== null; },
-      jump(step) {                             // previous (-1) / next (+1): quick dip, then that carol from its start
-        if (!timer) return;
-        const t = ctx.currentTime;
-        master.gain.cancelScheduledValues(t); master.gain.setValueAtTime(master.gain.value, t);
-        master.gain.linearRampToValueAtTime(0, t + .12); master.gain.linearRampToValueAtTime(.5, t + .6);
-        song = (song + step + SONGS.length) % SONGS.length; cur = songEvents(SONGS[song]); idx = 0; start = t + .3;
-      },
       start() {
         if (!ctx) setup();
         ctx.resume();
@@ -654,10 +637,7 @@
       const on = music.on || pref();
       btn.innerHTML = `♫ <span class="long">Music: </span>${on ? 'on' : 'off'}`;
       btn.setAttribute('aria-pressed', on); btn.setAttribute('aria-label', on ? 'Music on' : 'Music off');
-      $('musicNav').classList.toggle('hidden', !music.on);
     };
-    $('prevSong').onclick = e => { e.stopPropagation(); music.jump(-1); };
-    $('nextSong').onclick = e => { e.stopPropagation(); music.jump(1); };
     btn.onclick = e => {
       e.stopPropagation();
       if (music.on) { music.stop(); save(false); } else { music.start(); save(true); }
