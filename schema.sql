@@ -71,7 +71,7 @@ create or replace function public.santa_save_wishlist(w int, p text, wl text)
 returns void language plpgsql security definer set search_path = public, extensions as $$
 begin
   perform _santa_auth(w, p);
-  update people set wishlist = left(coalesce(wl, ''), 4000) where id = w;
+  update people set wishlist = left(coalesce(wl, ''), 12000) where id = w;   -- JSON: items with links, plus notes
 end $$;
 
 -- the draw: one random loop through everyone, so each person gives to exactly one person and

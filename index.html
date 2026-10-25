@@ -90,6 +90,23 @@
   .centre { text-align: center; }
   .centre .avatar { display: flex; justify-content: center; margin: 4px 0 10px; }
   .list { white-space: pre-wrap; background: #fff; border: 4px dashed var(--red); padding: 12px; margin-top: 8px; min-height: 60px; text-align: left; }
+  .list ul { list-style: none; margin: 0; padding: 0; white-space: normal; }
+  .list li { padding: 6px 0; border-bottom: 2px dotted #c3d1e6; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+  .list li:last-child { border-bottom: 0; }
+  .list li::before { content: '★'; color: var(--gold); }
+  .list a { color: #2453a8; font-size: 20px; word-break: break-all; }
+  .list .notes { margin-top: 10px; padding-top: 8px; border-top: 4px dashed #c3d1e6; }
+  .list .empty { color: #6b6f8d; }
+  .new { font-family: 'Press Start 2P', monospace; font-size: 8px; line-height: 1; padding: 4px 5px; background: var(--red); color: #fff; animation: blink 1s steps(2) infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  @media (prefers-reduced-motion: reduce) { .new { animation: none; } }
+  .changed { display: inline-block; font-family: 'Press Start 2P', monospace; font-size: 9px; line-height: 1.7; background: var(--gold); color: var(--ink); padding: 6px 10px; margin: 4px 0 2px; }
+  .wish-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; margin-top: 8px; }
+  .wish-row input { margin-top: 0; font-size: 22px; padding: 8px; }
+  .wish-row .btn { margin: 0; padding: 12px 12px; }
+  @media (max-width: 520px) { .wish-row { grid-template-columns: 1fr auto; } .wish-row .link { grid-column: 1; } .wish-row .btn { grid-row: 1 / span 2; grid-column: 2; } }
+  .wish-row + .wish-row { padding-top: 8px; border-top: 2px dotted #c3d1e6; }
+  #wishNotes { min-height: 90px; }
   .reveal .big { font-family: 'Press Start 2P', monospace; font-size: clamp(16px, 5vw, 26px); line-height: 1.6; color: var(--red-d); margin: 10px 0; }
   .rules { text-align: left; background: #e4f7e8; border: 4px solid var(--green-d); padding: 12px 16px; margin: 16px 0 6px; }
   .rules h3 { font-size: 12px; line-height: 1.6; color: var(--green-d); margin: 0 0 6px; }
@@ -172,11 +189,13 @@
         <canvas class="sprite" data-sprite="gift" data-scale="6"></canvas>
         <canvas class="sprite" data-sprite="gift2" data-scale="6"></canvas>
       </div>
+      <div><span class="changed hidden" id="changedClosed">Their wish list has changed!</span></div>
       <button class="btn" id="revealBtn">Open your gift tag</button>
       <div id="revealBody" class="hidden">
         <div class="match" id="recAvatar"></div>
         <div class="big" id="recName"></div>
         <p>Here are some ideas they've suggested:</p>
+        <span class="changed hidden" id="changedOpen">Updated since you last looked</span>
         <div class="list" id="recList"></div>
         <div class="rules">
           <h3>The Rules</h3>
@@ -184,7 +203,7 @@
             <li><b>Spend limit: £50.</b> Up to £50 in total. You don't have to spend it all.</li>
             <li><b>Their list is just ideas.</b> Pick something from it, or surprise them with something you think they'd love.</li>
             <li><b>Keep it secret!</b> Don't tell anyone who you've got, including your partner.</li>
-            <li><b>Check back.</b> They might add to their list, so have another look before you buy.</li>
+            <li><b>Check back.</b> They might add to their list, so have another look before you buy. New ideas get a <span class="new">NEW</span> badge.</li>
             <li><b>Label it.</b> Put their name on the tag, but not yours.</li>
           </ol>
         </div>
@@ -194,8 +213,11 @@
 
     <div class="panel">
       <h2>My Wish List</h2>
-      <p>Things you'd like. Ideas, sizes, favourites, budget notes...</p>
-      <textarea id="wish" placeholder="e.g. Cosy socks, a good book, anything Lego, fancy hot chocolate..."></textarea>
+      <p>Add things you'd like, one per row. Paste a shop link if you have one.</p>
+      <div id="wishRows"></div>
+      <button class="btn ghost" id="addWish">+ Add item</button>
+      <p style="margin-bottom:0">Anything else? Sizes, favourite colours, things you don't want...</p>
+      <textarea id="wishNotes" placeholder="e.g. Medium jumpers, size 6 shoes, loves anything green"></textarea>
       <button class="btn green" id="saveWish">Save list</button>
       <div id="wishMsg" class="ok"></div>
     </div>
@@ -886,6 +908,89 @@
     $('revealBtn').classList.toggle('hidden', open);
     $('giftsRow').classList.toggle('hidden', open);
     if (remember) { try { localStorage.setItem(revealKey(), open ? '1' : '0'); } catch {} }
+    if (!open) state.baseline = null;   // next time it opens, compare against what you'd seen up to now
+    renderRecList();
+  }
+
+  /* ---------- wish lists: rows of { t: item, u: link } plus free-text notes, saved as JSON text ---------- */
+  function parseWish(text) {
+    try { const o = JSON.parse(text); if (o && Array.isArray(o.items)) return { items: o.items, notes: o.notes || '' }; } catch {}
+    return { items: [], notes: text || '' };   // plain text (older lists): treat it all as notes
+  }
+  function safeUrl(u) {
+    u = (u || '').trim(); if (!u) return '';
+    if (!/^[a-z]+:/i.test(u)) u = 'https://' + u;
+    try { const x = new URL(u); return /^https?:$/.test(x.protocol) && x.hostname.includes('.') ? x.href : ''; } catch { return ''; }
+  }
+  const itemKey = i => (i.t || '').trim().toLowerCase() + '|' + (i.u || '');
+
+  // "updated" badges: compare their list against the version you last saw on this device
+  const seenKey = () => 'lowrySantaSeenV2_' + state.me;
+  const getSeen = () => { try { return localStorage.getItem(seenKey()); } catch { return null; } };
+  const setSeen = v => { try { localStorage.setItem(seenKey(), v); } catch {} };
+  function renderRecList() {
+    if (state.recWish == null) return;
+    const cur = state.recWish, open = !$('revealBody').classList.contains('hidden');
+    if (getSeen() === null) setSeen(cur);                    // first look on this device: nothing counts as new
+    const changed = getSeen() !== cur;
+    $('changedClosed').classList.toggle('hidden', open || !changed);
+    if (!open) return;
+    if (state.baseline == null) state.baseline = getSeen();  // keep the badges up while you're reading
+    setSeen(cur);
+    const was = parseWish(state.baseline), now = parseWish(cur), old = new Set(was.items.map(itemKey));
+    $('changedOpen').classList.toggle('hidden', state.baseline === cur);
+    const box = $('recList'); box.innerHTML = '';
+    if (now.items.length) {
+      const ul = document.createElement('ul');
+      now.items.forEach(i => {
+        const li = document.createElement('li'), name = document.createElement('span');
+        name.textContent = i.t || 'Something from this link'; li.append(name);
+        const href = safeUrl(i.u);
+        if (href) {
+          const a = document.createElement('a');
+          a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer';
+          a.textContent = new URL(href).hostname.replace(/^www\./, '') + ' ↗';
+          li.append(a);
+        }
+        if (!old.has(itemKey(i))) { const n = document.createElement('span'); n.className = 'new'; n.textContent = 'NEW'; li.append(n); }
+        ul.append(li);
+      });
+      box.append(ul);
+    }
+    if (now.notes.trim()) {
+      const n = document.createElement('div'); n.className = now.items.length ? 'notes' : '';
+      n.textContent = now.notes.trim(); box.append(n);
+    }
+    if (!box.childNodes.length) {
+      const e = document.createElement('div'); e.className = 'empty';
+      e.textContent = "They haven't added a wish list yet. Check back soon!"; box.append(e);
+    }
+  }
+
+  function addWishRow(item = {}) {
+    const row = document.createElement('div'); row.className = 'wish-row';
+    row.innerHTML = '<input class="item" maxlength="120" placeholder="Item, e.g. cosy socks">' +
+                    '<input class="link" maxlength="600" inputmode="url" placeholder="Link (optional)">' +
+                    '<button class="btn ghost" type="button" aria-label="Remove item" title="Remove">✕</button>';
+    row.querySelector('.item').value = item.t || ''; row.querySelector('.link').value = item.u || '';
+    row.querySelector('button').onclick = () => { row.remove(); if (!$('wishRows').children.length) addWishRow(); };
+    $('wishRows').append(row);
+    return row;
+  }
+  function fillWishEditor(w) {
+    $('wishRows').innerHTML = '';
+    w.items.forEach(addWishRow);
+    if (!w.items.length) { addWishRow(); addWishRow(); addWishRow(); }
+    $('wishNotes').value = w.notes;
+  }
+  function readWishEditor() {
+    const items = [...$('wishRows').children].map(r => {
+      const t = r.querySelector('.item').value.trim(), raw = r.querySelector('.link').value.trim();
+      return { t, u: safeUrl(raw), raw };
+    }).filter(i => i.t || i.raw);
+    const bad = items.find(i => i.raw && !i.u);
+    if (bad) throw new Error(`That link doesn't look right: ${bad.raw}`);
+    return { items: items.map(({ t, u }) => u ? { t, u } : { t }), notes: $('wishNotes').value.trim() };
   }
 
   async function refreshHome(first) {
@@ -894,7 +999,7 @@
       state.people = st.people; state.drawn = st.drawn;
       if (state.drawn || first) {
         const me = await rpc('santa_me', { w: state.me, p: state.pin });
-        if (first) $('wish').value = me.wishlist || '';
+        if (first) fillWishEditor(parseWish(me.wishlist));
         if (me.drawn && me.recipient) {
           const r = me.recipient;
           $('recAvatar').innerHTML = '';
@@ -902,9 +1007,9 @@
           const gift = document.createElement('canvas'); gift.className = 'sprite';
           gift.dataset.sprite = 'gift'; gift.dataset.scale = 6; drawSprite(gift); $('recAvatar').append(gift);
           $('recName').textContent = r.name;
-          $('recList').textContent = (r.wishlist || '').trim() || "They haven't added a wish list yet. Check back soon!";
+          state.recWish = r.wishlist || '';
           show('revealPanel');
-          setRevealed(revealedFlag());   // stays open if you've already opened it
+          setRevealed(revealedFlag());   // stays open if you've already opened it; also draws the list
         }
       }
     } catch (e) { /* transient (network blip); next poll will retry */ }
@@ -915,13 +1020,16 @@
   $('pinInput').onkeydown = e => { if (e.key === 'Enter') { if ($('pinConfirm').classList.contains('hidden')) tryLogin(); else $('pinConfirm').focus(); } };
   $('pinConfirm').onkeydown = e => { if (e.key === 'Enter') tryLogin(); };
   $('pinBack').onclick = () => view('pick');
-  $('logout').onclick = () => { store.clear(); state.me = state.pin = null; hide('revealPanel'); loadPick(); };
+  $('logout').onclick = () => { store.clear(); state.me = state.pin = state.recWish = state.baseline = null; hide('revealPanel'); loadPick(); };
   $('revealBtn').onclick = () => setRevealed(true, true);
   $('hideBtn').onclick = () => setRevealed(false, true);
+  $('addWish').onclick = () => addWishRow().querySelector('.item').focus();
   $('saveWish').onclick = async () => {
     $('wishMsg').className = 'ok'; $('wishMsg').textContent = '';
     try {
-      await rpc('santa_save_wishlist', { w: state.me, p: state.pin, wl: $('wish').value });
+      const w = readWishEditor();
+      await rpc('santa_save_wishlist', { w: state.me, p: state.pin, wl: JSON.stringify(w) });
+      fillWishEditor(w);   // tidies links (adds https://) and drops empty rows
       $('wishMsg').textContent = 'Saved!';
     } catch (e) { $('wishMsg').className = 'err'; $('wishMsg').textContent = e.message; }
   };
