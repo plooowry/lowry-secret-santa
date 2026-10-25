@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lowry Family Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -16,9 +17,10 @@
   body {
     margin: 0; min-height: 100vh; color: var(--snow);
     font-family: 'VT323', monospace; font-size: 24px; line-height: 1.15;
-    background: linear-gradient(var(--night) 0%, var(--night2) 100%) fixed;
+    background: var(--night);
   }
-  #snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+  #snow { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0;
+          background: linear-gradient(var(--night) 0%, var(--night2) 100%); }
   main { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; padding: 16px 16px 170px; }
   h1, h2, h3, .px { font-family: 'Press Start 2P', monospace; font-weight: normal; }
   h1 { font-size: clamp(18px, 5vw, 30px); line-height: 1.5; text-align: center; margin: 8px 0 4px;
@@ -421,42 +423,54 @@
         x: reduce ? (i + .5) * (innerWidth / all.length) - w0 / 2 : Math.random() * Math.max(60, innerWidth - w0),
         y: reduce ? 0 : Math.random() * maxY, dir: Math.random() < .5 ? -1 : 1,
         v: SPEED[p.age] + Math.random() * .15 };
+      w.frames = [0, 1].map(f => { const c = document.createElement('canvas'); paint(c, charGrid(p, f, null, true), s); return c; });
       paint(cv, charGrid(p, 0, null, true), s);
       return w;
     });
+    const show = (w, f) => {
+      if (w.frame === f) return;
+      w.frame = f; const ctx = w.cv.getContext('2d');
+      ctx.clearRect(0, 0, w.cv.width, w.cv.height); ctx.drawImage(w.frames[f], 0, 0);
+    };
     const place = w => {
-      w.el.style.transform = `translate(${w.x}px, ${-w.y}px)`;
-      w.el.style.zIndex = 100 - Math.round(w.y);
-      w.cv.style.transform = w.dir < 0 ? 'scaleX(-1)' : '';
+      w.el.style.transform = `translate(${w.x.toFixed(1)}px, ${(-w.y).toFixed(1)}px)`;
+      const z = 100 - Math.round(w.y), d = w.dir;
+      if (w.z !== z) { w.z = z; w.el.style.zIndex = z; }
+      if (w.d !== d) { w.d = d; w.cv.style.transform = d < 0 ? 'scaleX(-1)' : ''; }
     };
     walkers.forEach(place);
     if (reduce) return;
-    (function step() {
+    // k = how many 60fps frames have passed, so speed is the same on slow phones and 120Hz screens
+    let last = performance.now();
+    (function step(now) {
+      const k = Math.min(4, Math.max(0, (now - last) / 16.67)); last = now;
       for (const w of walkers) {
         if (w.pause > 0) {
-          if (--w.pause === 0) w.vy = (Math.random() - .5) * .3;
-          if (w.frame !== 0) { w.frame = 0; paint(w.cv, charGrid(w.p, 0, null, true), w.s); }
+          w.pause -= k;
+          if (w.pause <= 0) { w.pause = 0; w.vy = (Math.random() - .5) * .3; }
+          show(w, 0);
         } else {
-          w.x += w.dir * w.v; w.y += w.vy;
+          w.x += w.dir * w.v * k; w.y += w.vy * k;
           if (w.y < 0 || w.y > maxY) { w.y = Math.min(maxY, Math.max(0, w.y)); w.vy = -w.vy; }
           if (w.x < 0 || w.x > innerWidth - w.w0) { w.x = Math.min(innerWidth - w.w0, Math.max(0, w.x)); w.dir = -w.dir; }
-          if (++w.tick % 14 === 0) { w.frame ^= 1; paint(w.cv, charGrid(w.p, w.frame, null, true), w.s); }
-          if (Math.random() < .004) { w.pause = 60 + Math.random() * 180; }
-          else if (Math.random() < .003) w.dir = -w.dir;
+          w.tick += k; show(w, Math.floor(w.tick / 14) % 2);
+          if (Math.random() < .004 * k) { w.pause = 60 + Math.random() * 180; }
+          else if (Math.random() < .003 * k) w.dir = -w.dir;
         }
         place(w);
       }
       requestAnimationFrame(step);
-    })();
+    })(last);
   }
 
   /* ---------- falling pixel snow ---------- */
   (function snow() {
     const cv = $('snow'), ctx = cv.getContext('2d');
-    let flakes = [];
+    let flakes = [], lastW = 0;
     const resize = () => {
-      cv.width = innerWidth; cv.height = innerHeight;
-      const n = Math.min(110, Math.floor(innerWidth / 9));
+      if (innerWidth === lastW && Math.abs(innerHeight - cv.height) < 160) return;   // mobile address bar
+      lastW = innerWidth; cv.width = innerWidth; cv.height = innerHeight;
+      const n = Math.min(110, Math.floor(innerWidth / (innerWidth < 520 ? 12 : 9)));
       flakes = Array.from({ length: n }, () => ({
         x: Math.random() * cv.width, y: Math.random() * cv.height,
         s: Math.random() < .3 ? 6 : 3, v: .4 + Math.random() * 1.1, p: Math.random() * 6
@@ -466,16 +480,18 @@
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
       ctx.fillStyle = '#fff'; flakes.forEach(f => ctx.fillRect(f.x | 0, f.y | 0, f.s, f.s)); return;
     }
+    let last = performance.now();
     (function tick(t) {
+      const k = Math.min(4, Math.max(0, (t - last) / 16.67)); last = t;
       ctx.clearRect(0, 0, cv.width, cv.height);
       ctx.fillStyle = 'rgba(255,255,255,.85)';
       for (const f of flakes) {
-        f.y += f.v; f.x += Math.sin(t / 900 + f.p) * .35;
+        f.y += f.v * k; f.x += Math.sin(t / 900 + f.p) * .35 * k;
         if (f.y > cv.height) { f.y = -6; f.x = Math.random() * cv.width; }
         ctx.fillRect(Math.round(f.x / 3) * 3, Math.round(f.y / 3) * 3, f.s, f.s);
       }
       requestAnimationFrame(tick);
-    })(0);
+    })(last);
   })();
 
   /* ---------- countdown to Christmas Day (viewer's local time) ---------- */
@@ -937,10 +953,15 @@
     }
     if (!state.me) await loadPick();
     // one poll for everything: the workshop/draw status when logged in, the "who has joined" list on the picker
+    const joinedKey = () => state.people.map(p => p.joined ? 1 : 0).join('');
     setInterval(async () => {
+      if (document.hidden) return;
       if (state.me) return refreshHome(false);
       if (!$('pick').classList.contains('hidden')) {
-        try { const st = await rpc('santa_status'); state.people = st.people; renderPick(); } catch {}
+        try {
+          const st = await rpc('santa_status'), before = joinedKey();
+          state.people = st.people; if (joinedKey() !== before) renderPick();
+        } catch {}
       }
     }, 10000);
   }
