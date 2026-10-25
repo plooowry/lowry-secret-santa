@@ -140,6 +140,7 @@
     <h2>Who are you?</h2>
     <p>Tap yourself to get in. The first time, you'll choose your own PIN.</p>
     <div id="folks" class="folks"></div>
+    <p id="pickMsg" class="centre"></p>
   </section>
 
   <!-- 2. PIN -->
@@ -161,12 +162,6 @@
         <div class="who"><div id="meAvatar"></div><span class="px" id="whoami"></span></div>
         <button class="btn ghost" id="logout">Log out</button>
       </div>
-    </div>
-
-    <div class="panel" id="roomPanel">
-      <h2>The Workshop</h2>
-      <div id="room" class="folks"></div>
-      <p id="roomMsg"></p>
     </div>
 
     <div class="panel hidden reveal centre" id="revealPanel">
@@ -823,6 +818,10 @@
       el.onmouseleave = el.onblur = () => wave(cv, p.name, false);
       box.append(el);
     });
+    const joined = state.people.filter(p => p.joined).length, total = state.people.length;
+    $('pickMsg').textContent = joined === total ? `All ${total} elves have logged in!`
+      : joined === 0 ? `Nobody has logged in yet. Be the first!`
+      : `${joined} of ${total} have logged in so far. Everyone already has a match waiting for them.`;
   }
 
   function openPin(id) {
@@ -863,19 +862,6 @@
     await refreshHome(true);
   }
 
-  function renderRoom() {
-    const box = $('room'); box.innerHTML = '';
-    state.people.forEach(p => {
-      const el = folkCard(p, p.joined ? 'logged in' : 'not yet', p.joined ? 'in' : '');
-      if (p.id === state.me) el.classList.add('me');
-      box.append(el);
-    });
-    const joined = state.people.filter(p => p.joined).length, total = state.people.length;
-    $('roomMsg').textContent = joined === total
-      ? `All ${total} elves have logged in!`
-      : `${joined} of ${total} have logged in so far. Everyone already has a match waiting for them.`;
-  }
-
   // whether this person has opened their gift tag; remembered so it stays open on reload / return visits
   const revealKey = () => 'lowrySantaOpenV2_' + state.me;
   function revealedFlag() { try { return localStorage.getItem(revealKey()) === '1'; } catch { return false; } }
@@ -890,7 +876,6 @@
     try {
       const st = await rpc('santa_status');
       state.people = st.people; state.drawn = st.drawn;
-      renderRoom();
       if (state.drawn || first) {
         const me = await rpc('santa_me', { w: state.me, p: state.pin });
         if (first) $('wish').value = me.wishlist || '';
